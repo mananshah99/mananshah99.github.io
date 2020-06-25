@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.8.5">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2020-06-25T00:00:20-07:00</updated><id>http://localhost:4000/feed.xml</id><entry><title type="html">Latent Variable Models</title><link href="http://localhost:4000/blog/2020/06/23/lvm/" rel="alternate" type="text/html" title="Latent Variable Models" /><published>2020-06-23T00:00:00-07:00</published><updated>2020-06-23T00:00:00-07:00</updated><id>http://localhost:4000/blog/2020/06/23/lvm</id><content type="html" xml:base="http://localhost:4000/blog/2020/06/23/lvm/">&lt;p&gt;It’s taken me a while to fully grasp latent variable models, and I hope to use
+this post as a way to collect my thoughts and provide a concise examination of
+latent variable representation, learning, and inference. Significant portions of
+this material are inspired by Stanford’s &lt;a href=&quot;cs228.stanford.edu&quot;&gt;CS 228&lt;/a&gt; and &lt;a href=&quot;cs236.stanford.edu&quot;&gt;CS
+236&lt;/a&gt; courses, taught by Dr. Stefano Ermon.&lt;/p&gt;
+
+&lt;h2 id=&quot;introduction&quot;&gt;Introduction&lt;/h2&gt;
+
+&lt;p&gt;Many modeling problems are framed in a supervised setting, in which one is
+provided a dataset $X$ along with outcomes $Y$ with the task of predicting
+outcomes for new, unseen samples drawn from the same distribution as $X$.
+Discriminative models learn the conditional distribution $p(Y \mid X)$ directly,
+and therefore directly predict outcomes given new samples $X$. On the other
+hand, generative models specify or learn both $p(Y)$ and $p(X \mid Y)$, and
+compute $p(Y \mid X)$ via Bayes’ rule. Both models are powerful in their own
+respects: while discriminative models tend to be more expressive as they are
+only required to learn the conditional, generative models allow for sampling
+new data from $p(X \mid Y)$ and performing inference with some variables $X_i$
+are unobserved by marginalizing over the unseen variables.&lt;/p&gt;
+
+&lt;p&gt;In an unsupervised setting, in which one is provided a dataset $X$ without
+associated outcomes, discriminative modeling assumptions are no longer
+meaningful. However, generative models remain powerful: instead of specifying
+distributions $p(Y)$ and $p(X \mid Y)$, we now specify distributions $p(Z)$ and
+$p(X \mid Z)$ for latent variables $Z$. Intuitively, these variables $Z$
+represent unobserved factors of variation that contribute to diversity in $X$;
+for example, hair color and eye color in a dataset of faces or pencil stroke
+width and shape in a dataset of handwritten images. Learning such latent
+representations is both immensely powerful and incredibly challenging: while
+effective latent variables can improve modeling and understanding of the
+dataset, the unobserved nature of these variables implies that maximum
+likelihood cannot be directly applied as in supervised models.&lt;/p&gt;
+
+&lt;p&gt;The task of latent variable models (LVMs) is to explicity model latent
+variables as defined by the Bayes net $Z \to X$, with $Z$ unobserved and $X$
+observed. They therefore learn the joint distribution $p(X, Z; \theta)$ for
+parameters $\theta$. The remainder of this post will provide intuition for,
+and derivations of, learning algorithms for shallow and deep LVMs.&lt;/p&gt;
+
+&lt;h2 id=&quot;shallow-latent-variable-models&quot;&gt;Shallow Latent Variable Models&lt;/h2&gt;
+
+&lt;p&gt;We begin our discussion of latent variable models with shallow LVMs, models that
+consist of a simple relationship between $Z$ and $X$. In particular, these
+models specify distributions $p(Z)$ and $p(X \mid Z)$ such that the computation
+of $p(Z \mid X)$ is tractable. One common example is the Gaussian mixture model,
+which specifies $z \sim \text{Categorical}(1 \dots k)$ and $p(x \mid z = k) =
+\mathcal{N}(x \mid \mu_k, \sigma_k)$.&lt;/p&gt;
+
+&lt;p&gt;To learn such a model via maximum likelihood, we hope to solve the optimization
+problem&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\text{argmax}_\theta \prod_{x \in \mathcal{D}}  p(x; \theta)
+= \text{argmax}_\theta \prod_{x \in \mathcal{D}} \sum_{z} p(x, z; \theta)&lt;/script&gt;
+
+&lt;p&gt;Our log-likelihood function is therefore&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\ell(\theta; \mathcal{D}) = \sum_{x \in \mathcal{D}} \log \sum_z p(x, z; \theta)&lt;/script&gt;
+
+&lt;p&gt;which does not admit a decomposition conducive to optimization due to the
+summation within the logarithm.&lt;/p&gt;
+
+&lt;h3 id=&quot;a-first-attempt-sampling&quot;&gt;A First Attempt: Sampling&lt;/h3&gt;
+
+&lt;p&gt;One potential solution to the issues posed by the marginalization over $z$ in the
+likelihood function is to perform a &lt;a href=&quot;http://statweb.stanford.edu/~susan/courses/s208/node14.html&quot;&gt;Monte Carlo
+estimate&lt;/a&gt; of the
+inner sum by sampling $z$ at random and approximating the inner sum with a
+sample average:&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\sum_z p(x, z; \theta) = |\mathcal{Z}| \sum_z \frac{1}{|\mathcal{Z}|} p(x, z;
+\theta)  = |\mathcal{Z}| \mathbf{E}_{z \sim \text{Uniform}(\mathcal{Z})} p(x, z;
+\theta)&lt;/script&gt;
+
+&lt;p&gt;While this works in theory, in practice such estimates tend to perform poorly
+as the search space increases exponentially and the majority of randomly
+selected $z$s yield a small joint probability. A second, more intricate, attempt
+via &lt;a href=&quot;https://en.wikipedia.org/wiki/Importance_sampling&quot;&gt;importance sampling&lt;/a&gt;
+with proposal distribution $q(z \mid x)$ yields&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\begin{align}
+\sum_z p(x, z; \theta) = \sum_z q(z \mid x) \frac{p(x, z; \theta)}{q(z \mid x)} = \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]
+\end{align}&lt;/script&gt;
+
+&lt;p&gt;where we again approximate the expectation with a sample average, this time from
+the proposal distribution $q(z \mid x)$. Doing so alleviates the issue of few
+‘‘hits’’ with uniform random sampling in the naive Monte Carlo estimate, given
+an appropriate choice of $q(z \mid x)$.&lt;/p&gt;
+
+&lt;p&gt;But what should our proposal distribution be? Ideally, we’d like to be sampling
+$z \sim p(z \mid x; \theta)$ to choose likely values of the latent variables,
+and so a reasonable choice would be $q(z \mid x) = p (z \mid x; \theta)$. Since
+we’re working with shallow LVMs, we can safely assume this is a simple
+distribution we can sample from (we can compute it with Bayes’ theorem). &lt;sup id=&quot;fnref:1&quot;&gt;&lt;a href=&quot;#fn:1&quot; class=&quot;footnote&quot;&gt;1&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+
+&lt;p&gt;However, while this approach allows us to decompose the joint distribution $p(x,
+z; \theta)$, writing the log-likelihood function yields&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\ell(\theta) = \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]&lt;/script&gt;
+
+&lt;p&gt;which presents us with another problem: it is difficult to optimize the logarithm
+of a sum.&lt;/p&gt;
+
+&lt;h3 id=&quot;acheiving-tractability-a-lower-bound-on-elltheta&quot;&gt;Acheiving Tractability: A Lower Bound on $\ell(\theta)$&lt;/h3&gt;
+
+&lt;p&gt;In order to transform the logarithm of a sum into a sum of logarithms in the
+log-likelihood function, we apply &lt;a href=&quot;https://en.wikipedia.org/wiki/Jensen%27s_inequality&quot;&gt;Jensen’s
+inequality&lt;/a&gt;. Doing so
+provides us a lower bound on $\ell(\theta)$:&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\ell(\theta) &amp;= \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \\
+             &amp;\geq \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim q(z \mid x)} \log \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \label{jensen} \tag{1} \\
+             &amp;=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} \label{a} \tag{2} \\
+             &amp;=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log p(x, z; \theta) - \sum_{x \in \mathcal{D}} \sum_z q(z \mid x) \log q(z \mid x) \label{elbo} \tag{3} \\
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;where Equation \ref{jensen} is by Jensen. We have therefore arrived at a lower
+bound for the likelihood $\ell(\theta)$ that’s optimizable! In fact, the lower
+bound in Equation \ref{elbo} is so important that we’ll give it a special name: the
+&lt;em&gt;evidence lower bound (ELBO)&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Note that our derivation of the ELBO is independent of a choice of $q(z \mid
+x)$. However, as it turns out, our intuitive choice of $q(z \mid x) = p(z \mid
+x; \theta)$ has a beautiful property: it makes the bound tight! For proof,
+substituting this distribution in Equation \ref{a} yields&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} &amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(x, z; \theta)}{p(z \mid x)} \\
+&amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(z \mid x) p(x)}{p(z \mid x)} \\
+&amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log p (x) \\
+&amp;= \ell(\theta)
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;as desired. As a result, choosing $q(z \mid x) = p(z \mid x; \theta)$ guarantees
+that optimizing the ELBO always increases the likelihood.&lt;/p&gt;
+
+&lt;h3 id=&quot;expectationmaximization&quot;&gt;Expectation—Maximization&lt;/h3&gt;
+
+&lt;p&gt;So far, we’ve built intuition for maximizing the LVM log-likelihood function by
+drawing insights from importance sampling and subsequently obtaining a tractable
+lower bound on the log-likelihood function (the ELBO). With proposal
+distribution $q(z \mid x) = p(z \mid x; \theta)$ tractable for shallow LVMs, we 
+are guaranteed that the ELBO is tight.&lt;/p&gt;
+
+&lt;p&gt;The expectation—maximization algorithm builds upon these ideas, iteratively
+optimizing the ELBO over $q$ in the expectation step and the model parameters
+$\theta$ in the maximization step. Since the ELBO is tight in the expectation step,
+optimization over $\theta$ in the maximization step is guaranteed to increase
+the log-likelihood, ensuring that each step of the algorithm makes progress. In
+particular, the algorithm proceeds as follows:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Initialize $\theta_0$, either at random or with a good first guess&lt;/li&gt;
+  &lt;li&gt;Repeat until convergence:&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\theta_{t+1} = \text{argmax}_\theta \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim p(z \mid x; \theta_t)} \log p(x, z; \theta)&lt;/script&gt;
+
+&lt;p&gt;which is broken down into the ‘‘E’’ and ‘‘M’’ steps as follows.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;E(xpectation) step.&lt;/strong&gt; For each $x \in \mathcal{D}$, compute the proposal
+distribution $q(z \mid x) = p(z \mid x, \theta_t)$; this is the posterior
+probability for all values $z$ can take. A common interpretation is that we
+``hallucinate’’ the missing values of the latent variables $z$ by computing the
+distribution over $z$ using our current parameters, $\theta_t$. Note that this
+computation requires iterating over all values of $z$ in the discrete case and
+integrating in the continuous case, and is therefore only tractable in the
+shallow LVM case.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;M(aximization) step.&lt;/strong&gt; Compute $\theta_{t+1}$ given the posterior computed in
+the E step. This requires computing and updating along the gradient;
+however, as the logarithm is within the sum, doing so is tractable.&lt;/p&gt;
+
+&lt;p&gt;An illustrative example of expectation—maximization for Gaussian mixture models
+is located &lt;a href=&quot;https://people.csail.mit.edu/rameshvs/content/gmm-em.pdf&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;deep-latent-variable-models&quot;&gt;Deep Latent Variable Models&lt;/h2&gt;
+
+&lt;p&gt;We continue our discussion of latent variable models with deep LVMs, models that
+consist of a more complicated relationship between $Z$ and $X$. In particular,
+we remove the assumption that the $p(Z)$ and $p(X \mid Z)$ are chosen so that
+$p(Z \mid X)$ is tractable. While doing so allows for heightened expressivity,
+it also invalidates the tractability of $p(z \mid x; \theta)$, a requirement
+for the tightness of the ELBO in expectation—maximization.&lt;/p&gt;
+
+&lt;p&gt;One common example of a deep LVM is the variational autoencoder (VAE), which
+extends the Gaussian mixture model to a mixture of an infinite number of
+Gaussian distributions. VAEs are specified as $z \sim \mathcal{N}(0, I)$, $p(x
+\mid z) = \mathcal{N}(\mu_\theta(z), \Sigma_\theta(z))$, and $q(z \mid x;
+\lambda) = \mathcal{N}(\mu_\lambda(x), \sigma_\lambda(x))$. The necessity of
+specifying a proposal distribution $q$ will become evident as we build
+intuition for learning deep LVMs.&lt;/p&gt;
+
+&lt;p&gt;The log-likelihood function and learning problem for deep LVMs are the same
+as those of shallow LVMs.&lt;/p&gt;
+
+&lt;h3 id=&quot;revisiting-the-elbo&quot;&gt;Revisiting the ELBO&lt;/h3&gt;
+
+&lt;p&gt;Since the posterior distribution $p(z \mid x; \theta)$ is no longer guaranteed
+to be tractable, we can no longer tractably compute the expectations with
+respect to the posterior in the E-step of expectation—maximization. We’ll
+therefore need a new learning algorithm for deep LVMs; to derive one, let’s
+begin by revisiting the evidence lower bound (Equation \ref{elbo}).&lt;/p&gt;
+
+&lt;p&gt;Recall that the ELBO is a lower bound to the log-likelihood for all choices of
+proposal distribution $q(z)$. To quantify how poor the bound is for an
+arbitrary choice of $q(z)$, we can express the
+&lt;a href=&quot;https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence&quot;&gt;KL-divergence&lt;/a&gt;
+between $q(z)$ and $p(z \mid x; \theta)$ as&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;D_{KL} (q(z) \| p(z \mid x; \theta)) = -\sum_z q(z) \log p(z, x; \theta) + \log p(x; \theta) - \sum_z q(z) \log q(z) \geq 0&lt;/script&gt;
+
+&lt;p&gt;which we rearrange to obtain&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\ell (\theta) = \log p(x; \theta) = \underbrace{\sum_z q(z) \log p(z, x; \theta) - \sum_z q(z) \log q(z)}_{\text{ELBO}} + D_{KL} (q(z) \| p(z \mid x; \theta))&lt;/script&gt;
+
+&lt;p&gt;As expected, setting $q(z) = p(z \mid x; \theta)$ makes the ELBO tight since the
+KL-divergence between identical distributions is zero. More importantly, since
+$p(z \mid x; \theta)$ is intractable for deep LVMs, this formulation of the ELBO
+motivates a &lt;em&gt;variational&lt;/em&gt; learning algorithm: can we learn a tractable
+distribution $q(z; \phi)$ to closely approximate $p(z \mid x; \theta)$? Doing so
+would tighten the ELBO, improving our ability to increase $\ell(\theta)$.&lt;/p&gt;
+
+&lt;p&gt;This process is termed variational learning &lt;sup id=&quot;fnref:2&quot;&gt;&lt;a href=&quot;#fn:2&quot; class=&quot;footnote&quot;&gt;2&lt;/a&gt;&lt;/sup&gt; as it involves the optimization
+of $q(z; \phi)$ in function space. Jointly optimizing over our original
+paramters $\theta$ and our variational parameters $\phi$ thus provides a
+reasonable way to maximize the ELBO over a dataset.&lt;/p&gt;
+
+&lt;h3 id=&quot;variational-learning&quot;&gt;Variational Learning&lt;/h3&gt;
+
+&lt;p&gt;Building upon the intuition derived in the previous section, we can write the
+ELBO with variational parameters as&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\mathcal{L}(x; \theta, \phi) &amp;= \sum_z q(z; \phi) \log p(z, x; \theta) - \sum_z q(z; \phi) \log q (z; \phi) \\
+                             &amp;= \mathbf{E}_{z \sim q(z; \phi)} [\log p(z, x; \theta) - \log q (z; \phi)]
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;Our new form of maximum likelihood learning over our dataset is to maximize a
+lower bound to $\ell(\theta)$:&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\ell (\theta) = \sum_{x^{(i)} \in \mathcal{D}} \log p(x^{(i)}; \theta) \geq \sum_{x^{(i)} \in \mathcal{D}} \mathcal{L}(x^{(i)}; \theta, \phi^{(i)})&lt;/script&gt;
+
+&lt;p&gt;where we note that each data point $x^{(i)}$ has an associated set of
+variational parameters $\phi^{(i)}$ as the true posterior $p(z \mid x^{(i)};
+\theta)$ is different for each data point $x^{(i)}$. Doing so can be challenging
+for large datasets (where such large numbers of parameters makes optimization
+expensive), so we instead choose to learn how to map each $x^{(i)}$ to a good
+set of parameters $\phi^{(i)}$ via a function $f_\lambda$.&lt;sup id=&quot;fnref:3&quot;&gt;&lt;a href=&quot;#fn:3&quot; class=&quot;footnote&quot;&gt;3&lt;/a&gt;&lt;/sup&gt; Specifically, we work
+with $q(z; f_\lambda(x))$ for each $x$; in the literature (and for the remainder
+of this post), we write $q(z; f_\lambda(x))$ as $q(z \mid x; \lambda)$. Our ELBO
+thus has the form&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\mathcal{L}(x; \theta, \lambda) &amp;= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;We optimize the ELBO with gradient descent, updating both the model parameters
+$\theta$ and the variational parameters $\lambda$. Our learning algorithm is therefore&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Initialize $\theta^{(0)}, \lambda^{(0)}$&lt;/li&gt;
+  &lt;li&gt;Randomly sample a data point $x^{(i)}$ from $\mathcal{D}$&lt;/li&gt;
+  &lt;li&gt;Compute $\nabla_\theta \mathcal{L}(x; \theta, \lambda)$ and $\nabla_\lambda \mathcal{L}(x; \theta, \lambda)$&lt;/li&gt;
+  &lt;li&gt;Update $\theta, \lambda$ in the gradient direction&lt;/li&gt;
+  &lt;li&gt;Wash, rinse, repeat&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;computing-variational-gradients&quot;&gt;Computing Variational Gradients&lt;/h3&gt;
+
+&lt;p&gt;Now that we have a learning algorithm, the final piece of the puzzle is to
+compute the gradients of the ELBO with respect to $\theta$ and $\lambda$.&lt;/p&gt;
+
+&lt;p&gt;Let’s first examine the gradient with respect to $\theta$. We simply have&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\nabla_\theta \mathcal{L}(x; \theta, \lambda) &amp;= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)] \\
+                                              &amp;= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\nabla_\theta \log p(z, x; \theta)]
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;which we can approximate with Monte Carlo sampling from $q(z \mid x; \lambda)$.&lt;/p&gt;
+
+&lt;p&gt;Let’s next consider the gradient with respect to $\lambda$. We have&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;% &lt;![CDATA[
+\begin{align}
+\nabla_\lambda \mathcal{L}(x; \theta, \lambda) &amp;= \nabla_\lambda \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
+\end{align} %]]&gt;&lt;/script&gt;
+
+&lt;p&gt;but we can’t simply pass the gradient through the expectation as before since the
+expectation is itself parameterized by $\lambda$. We can solve this problem in two
+ways: a general technique from reinforcement learning called REINFORCE, and a
+more stable (but specific) technique called the reparameterization trick. An
+excellent article explaining and comparing the two is
+&lt;a href=&quot;http://stillbreeze.github.io/REINFORCE-vs-Reparameterization-trick/&quot;&gt;here&lt;/a&gt;:
+REINFORCE yields&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\nabla_\lambda \mathcal{L}(x; \theta, \lambda) = \mathbf{E}_{z \sim q(z \mid x; \lambda)} [(\log p(z, x; \theta) - \log q(z \mid x; \lambda)) \nabla_\lambda \log q(z \mid x; \lambda)]&lt;/script&gt;
+
+&lt;p&gt;while the reparametrization trick varies depending on the choice of $q(z \mid x;
+\lambda)$ (and only works for continuous $q$ with specific properties); further
+information can be found
+&lt;a href=&quot;https://gregorygundersen.com/blog/2018/04/29/reparameterization/&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;interpreting-variational-autoencoders&quot;&gt;Interpreting Variational Autoencoders&lt;/h3&gt;
+
+&lt;p&gt;Earlier in this section, discussing the VAE model required specification of the
+variational proposal distribution $q(z \mid x; \lambda)$; as evident from our
+derivation of the variational learning algorithm, specifying the class of
+distributions from which $q$ is to be learned is necessary. A common interpretation
+is that $q(z \mid x; \lambda)$ acts as an ‘‘encoder’’ to latent representation 
+$z$, and $p(x \mid z; \theta)$ acts as a ‘‘decoder’’ to the true data distribution.&lt;/p&gt;
+
+&lt;p&gt;It so happens that specifying $p (x \mid z; \theta)$ and $q (z \mid x; \lambda)$
+as normal distributions as in &lt;a class=&quot;citation&quot; href=&quot;#kingma2013auto&quot;&gt;(Kingma &amp;amp; Welling, 2013)&lt;/a&gt; allows for an analytical
+simplification of the ELBO as&lt;/p&gt;
+
+&lt;script type=&quot;math/tex; mode=display&quot;&gt;\mathcal{L}(x; \theta, \lambda) = \underbrace{D_{KL} (q(z \mid x; \lambda) \|
+p(z))}_{\text{Analytically compute this}} + \underbrace{\mathbf{E}_{z \sim q(z \mid x;
+\lambda)} \log p(x \mid z; \theta)}_{\text{Monte Carlo estimate this}}&lt;/script&gt;
+
+&lt;p&gt;This representation also has a nice interpretation: the first term encourages
+latent representations to be likely under the prior $p(z)$, and the second term
+encourages $x$ to be likely given its latent representation.&lt;/p&gt;
+
+&lt;h2 id=&quot;summary--further-reading&quot;&gt;Summary &amp;amp; Further Reading&lt;/h2&gt;
+
+&lt;p&gt;Latent variable models are incredibly useful frameworks that combine simple 
+distributions to create more complicated ones. Defined by the Bayes net structure
+$Z \to X$, they permit ancestral sampling for efficient generation ($z \sim p(z)$
+and $x \sim p(x \mid z; \theta))$, but often have intractable log-likelihoods,
+making learning difficult.&lt;/p&gt;
+
+&lt;p&gt;Both shallow and deep LVMs therefore optimize a lower bound to the log
+likelihood, called the ELBO. While shallow LVMs make the ELBO tight by
+explicitly computing $q(z \mid x; \theta) = p(z \mid x; \theta)$, this
+computation is intractable for deep LVMs, which use variational learning to
+learn a distribution $q(z \mid x; \lambda)$ that best approximates $p(z \mid x;
+\theta)$. Jointly learning the model $\theta$ and the amortized inference component
+$\lambda$ helps deep LVMs acheive tractability for ELBO optimization.&lt;/p&gt;
+
+&lt;p&gt;Many other types of latent variable models which perform learning without
+worrying about the ELBO weren’t covered in this post. For the interested
+reader, normalizing flow models (using invertible transformations) and GANs
+(likelihood-free models) are exciting avenues for further reading.&lt;/p&gt;
+
+&lt;h2 id=&quot;notes&quot;&gt;Notes&lt;/h2&gt;
+
+&lt;div class=&quot;footnotes&quot;&gt;
+  &lt;ol&gt;
+    &lt;li id=&quot;fn:1&quot;&gt;
+      &lt;p&gt;If this worries you, that’s good! We throw away this assumption with deep latent variable models, but doing so makes learning far more complicated… &lt;a href=&quot;#fnref:1&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:2&quot;&gt;
+      &lt;p&gt;'’Variational’’ is a term borrowed from variational calculus; in our context, it refers to the process of optimizing over functions. &lt;a href=&quot;#fnref:2&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:3&quot;&gt;
+      &lt;p&gt;Learning a single parametric function $f_\lambda : x \to \phi$ that maps each $x$ to a set of variational parameters is called amortized inference, as the process of inferring $z$ given $x$ is amortized over all training examples for sake of tractability. &lt;a href=&quot;#fnref:3&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/div&gt;</content><author><name></name></author><summary type="html"></summary></entry></feed>
