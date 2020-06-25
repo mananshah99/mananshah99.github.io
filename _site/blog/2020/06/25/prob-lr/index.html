@@ -1,0 +1,173 @@
+<html>
+<head>
+    <title>A (Formal) Probabilistic Interpretation of Linear Regression</title>
+    <meta charset='UTF-8'>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+
+    <meta name='description' content='Manan Shah is a senior at Stanford University.'>
+    <meta name='keywords' content='machine-intelligence'>
+    <meta name='author' content='Manan Shah'>
+
+    <link href='/css/callout.css' rel='stylesheet'/>
+    <link href='/css/blog.css' rel='stylesheet'/>
+    <link href='/css/trac.css' rel='stylesheet'/>
+    <link href='/css/markdown.css' rel='stylesheet'/>
+
+    <script type='text/x-mathjax-config'>
+MathJax.Hub.Config({
+  jax: ['input/TeX', 'output/HTML-CSS'],
+  tex2jax: {
+    inlineMath: [ ['$', '$'] ],
+    displayMath: [ ['$$', '$$']],
+    processEscapes: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    extensions: ['color.js']
+  },
+  messageStyle: 'none',
+  'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
+});
+</script>
+
+<script src='//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML' type='text/javascript'></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+</head>
+<body>
+<div class='content'>
+    <div class='nav'>
+    <ul class='wrap'>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/blog'>Blog</a></li>
+        <li><a href='/feed.xml'>RSS</a></li>
+    </ul>
+</div>
+    <div class='front-matter'>
+        <div class='wrap'>
+            <h1>A (Formal) Probabilistic Interpretation of Linear Regression</h1>
+            <h4>Linear regression is a prolific and natural algorithm often justified probabilistically by assuming that the error in the relationship between target and input variables is Gaussian. Here, I provide a formal proof of this justification.</h4>
+            <div class='bylines'>
+                <div class='byline'>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>25 June 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-intelligence</p>
+                </div>
+            </div>
+            <div class='clear'></div>
+        </div>
+    </div>
+    <div class='wrap article'>
+        <p>Linear regression is a canonical problem often introduced at the start of
+courses in machine intelligence. <a class="citation" href="#ng2000cs229">(Ng, 2000)</a> justifies the model by
+endowing the data with certain probabilistic assumptions, from which the
+least-squares cost function is derived. However, the justifications provided are
+at times handwavy, leaving the reader grasping at straws. Here, we explicitly
+state the assumptions needed to derive least-squares and provide a formal
+justification of its derivation. Our work is inspired by
+<a href="https://stats.stackexchange.com/questions/329051/probablistic-interpretation-of-linear-regression?noredirect=1&amp;lq=1">these</a>
+<a href="https://stats.stackexchange.com/questions/305908/likelihood-in-linear-regression">discussions</a>.</p>
+
+<h2 id="necessary-assumptions">Necessary Assumptions</h2>
+
+<p>We begin by detailing the assumptions required to derive the linear regression
+model. Let our dataset $\mathcal{D}$ consist of input-target pairs $(x_i, y_i)$.
+Let us assume that:</p>
+
+<ol>
+  <li>
+    <p>The target variables $y_i$ and inputs $x_i$ originate from random variables
+$Y_i, X_i$ that have a common density $f_{X_i, Y_i}$. The variables $Z_i =
+(X_i, Y_i)$ are independent.</p>
+  </li>
+  <li>
+    <p>The target variables and input variables are related via the equation
+<script type="math/tex">y_i = \theta^T x_i + \epsilon_i</script>
+where the error terms $\epsilon_i$ capture random noise or unmodeled effects.</p>
+  </li>
+  <li>
+    <p>The error terms $\epsilon_i \sim \mathcal{N}(0, \sigma^2)$ are independently and
+identically distributed.</p>
+  </li>
+</ol>
+
+<p>These assumptions are quite reasonable: in English, we’re simply requiring that
+the datapoints $(x_i, y_i)$ are drawn independently from the data distribution
+$f_{X, Y}$, and that each target variable is related to its input variable by
+a linear transformation and a component representing random noise.</p>
+
+<h2 id="representing--f_x_i-y_i">Representing $\ f_{X_i, Y_i}$</h2>
+
+<p>Our next step is to derive the likelihod of our dataset under the aforementioned
+assumptions. To do so, we must represent the joint distribution of each
+target-variable pair, $f_{X_i, Y_i}$. We’ll approach this problem by first
+representing the joint distribution of each input-error pair, $f_{\epsilon_i,
+X_i}$, and applying the change-of-variables formula.</p>
+
+<p>By assumption 3, $\epsilon_i \perp x_i$. We can therefore write the joint
+distribution of each input-error pair as</p>
+
+<script type="math/tex; mode=display">f_{\epsilon_i, X_i}(\epsilon, x) = f_{\epsilon_i}(\epsilon) f_{X_i}(x)</script>
+
+<p>Furthermore, by assumption 2, there exists a linear relationship between $y_i$ and
+$x_i$. This relationship allows us to define a transformation $\phi :
+(\epsilon_i, X_i) \to (Y_i, X_i)$ such that</p>
+
+<script type="math/tex; mode=display">% <![CDATA[
+\begin{align}
+\phi(\epsilon_i, x_i) &= (\theta^Tx_i + \epsilon_i, x_i) \\
+\phi^{-1}(y_i, x_i) &= (y_i - \theta^T x_i, x_i)
+\end{align} %]]></script>
+
+<p>We are now ready to apply the change-of-variables formula from $f_{\epsilon_i,
+X_i}$ to $f_{Y_i, X_i}$. Specifically, for an invertible mapping $\phi :
+\mathbf{R}^n \to \mathbf{R}^n$ between random variables $A_1 \dots A_n$ and $B_1
+\dots B_n$ such that $\mathbf{B} = \phi(\mathbf{A})$ and $\mathbf{A} =
+\phi^{-1}(\mathbf{B})$, we have that</p>
+
+<script type="math/tex; mode=display">p_{B_1 \dots B_n}(B_1 \dots B_n) = p_{A_1 \dots A_n} (\phi^{-1} (B_1 \dots B_n)) \left| \text{det} \left( \frac{\partial \phi^{-1} (A_1 \dots A_n)}{\partial A_1 \dots A_n} \right) \right|</script>
+
+<p>In our case, $B_1 = Y_i$, $B_2 = X_i$, $A_1 = \epsilon_i$, $A_2 = X_i$. We first
+compute</p>
+
+<script type="math/tex; mode=display">% <![CDATA[
+\partial \phi^{-1} = \begin{bmatrix} 1 & - \theta^T \\ 0 & 1  \end{bmatrix} %]]></script>
+
+<p>which has determinant 1. We therefore have</p>
+
+<script type="math/tex; mode=display">f_{Y_i, X_i}(y_i, x_i) = f_{\epsilon_i, X_i} (y_i - \theta^T x_i, x_i) = f_{\epsilon_i} (y_i - \theta^T x_i) f_{X_i}(x_i)</script>
+
+<p>again due to $\epsilon_i \perp x_i$.</p>
+
+<h2 id="deriving-the-likelihood">Deriving the Likelihood</h2>
+
+<p>Since linear regression is a discriminative model, we do not model the prior
+density of the input variables $f_{X_i}$ and focus our efforts solely on
+maximizing the conditional likelihood $f_{Y_i \mid X_i}$ across our dataset. We
+can write the conditional as</p>
+
+<script type="math/tex; mode=display">f_{Y_i \mid X_i}(y_i \mid x_i) = \frac{f_{Y_i, X_i} (y_i, x_i)}{f_{X_i}(x_i)} = f_{\epsilon_i} (y_i - \theta^T x_i)</script>
+
+<p>By assumption 1, each $(X_i, Y_i)$ is independent, and so we have</p>
+
+<script type="math/tex; mode=display">f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} f_{\epsilon_i}(y_i - \theta^T x_i)</script>
+
+<p>Explicitly, this is</p>
+
+<script type="math/tex; mode=display">f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} \frac{1}{\sqrt{2 \pi \sigma^2}} \exp \left( - \frac{(y_i - \theta^T x_i)^2}{2 \sigma^2} \right)</script>
+
+<p>Maximizing $f_{X \mid Y}$ with respect to $\theta$ is now a simple exercise in
+calculus; one typically maximizes $\log f_{X \mid Y}$ as a proxy to transform
+the product into a sum. After some calculus as in <a class="citation" href="#ng2000cs229">(Ng, 2000)</a>, we
+conclude that maximizing the log-likelihood is equivalent to minimizing</p>
+
+<script type="math/tex; mode=display">\sum{1}{2} \sum_{(x_i, y_i) \in \mathcal{D}} (y_i - \theta^T x_i)^2</script>
+
+<p>which is the canonical least-squares cost function for linear regression, as
+desired.</p>
+
+    </div>
+    <div id='bibliography'>
+        <div class='wrap'>
+            <ol class="bibliography"><li><span id="ng2000cs229">Ng, A. (2000). CS229 Lecture notes. <i>CS229 Lecture Notes</i>, <i>1</i>(1), 1–178.</span></li></ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>
