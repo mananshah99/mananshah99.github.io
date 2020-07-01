@@ -1,0 +1,12 @@
+Ideas:
+
+* linear algebra (ee 263)
+* svd (ee 263, 364a) + pca (168?)
+* kkt + the dual (364a)
+* kernel trick (229)
+* deep double descent (openai)
+* PAC assumptions? (229)
+* frequentist vs bayesian interpretations (200)
+* k means as coordinate descent (229)
+* types of initializations for weights
+* backprop (neilsen book)
