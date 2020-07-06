@@ -1,0 +1,308 @@
+<html>
+<head>
+    <title>Learning Feedforward Networks</title>
+    <meta charset='UTF-8'>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+
+    <meta name='description' content='Manan Shah is a senior at Stanford University.'>
+    <meta name='keywords' content='machine-learning'>
+    <meta name='author' content='Manan Shah'>
+
+    <link href='/css/callout.css' rel='stylesheet'/>
+    <link href='/css/blog.css' rel='stylesheet'/>
+    <link href='/css/trac.css' rel='stylesheet'/>
+    <link href='/css/markdown.css' rel='stylesheet'/>
+
+    <script type='text/x-mathjax-config'>
+MathJax.Hub.Config({
+  jax: ['input/TeX', 'output/HTML-CSS'],
+  tex2jax: {
+    inlineMath: [ ['$', '$'] ],
+    displayMath: [ ['$$', '$$']],
+    processEscapes: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    extensions: ['color.js']
+  },
+  messageStyle: 'none',
+  'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
+});
+</script>
+
+<script src='//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML' type='text/javascript'></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+</head>
+<body>
+<div class='content'>
+    <div class='nav'>
+    <ul class='wrap'>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/blog'>Blog</a></li>
+        <li><a href='/feed.xml'>RSS</a></li>
+    </ul>
+</div>
+    <div class='front-matter'>
+        <div class='wrap'>
+            <h1>Learning Feedforward Networks</h1>
+            <h4>I rederive backpropagation for feedforward networks from first principles.</h4>
+            <div class='bylines'>
+                <div class='byline'>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>01 July 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-learning</p>
+                </div>
+            </div>
+            <div class='clear'></div>
+        </div>
+    </div>
+    <div class='wrap article'>
+        <p>There’s no lack of tutorials on feedforward (“neural”) networks and their
+learning algorithms, but I’ve often found that online resources often leave many
+details to the reader or employ confusing notation without providing relevant
+intuition. Here, I methodically derive backpropagation for feedforward networks.
+This post was inspired by, and some of its content was derived from,
+<a href="https://andrew.gibiansky.com/blog/machine-learning/fully-connected-neural-networks/">these</a>
+<a href="http://neuralnetworksanddeeplearning.com/chap2.html">two</a> excellent resources.</p>
+
+<h1 id="introduction-and-notation">Introduction and Notation</h1>
+
+<p>For the duration of this post, we’ll consider a feedforward network with $L$
+layers indexed $l = 1 \dots L$ as in the diagram below. Each node in a
+feedforward network computes a <em>weighted output</em> and an <em>activation</em>.
+Intuitively, a node’s weighted output sums and weights information from nodes in
+the previous layer, and its activation applies a nonlinearity to the weighted
+output so that the network can compute nonlinear functions.</p>
+
+<p>Feedforward networks have three types of nodes:</p>
+
+<ul>
+  <li>Input nodes ($l = 1$), whose weighted outputs are fixed by the input values</li>
+  <li>Hidden nodes ($l = 2 \dots L - 1)$, whose weighted inputs are determined by a
+linear combination of the previous nodes’ activations</li>
+  <li>Output nodes ($l = L$), whose activations are treated as the predictions of
+the network</li>
+</ul>
+
+<p>Each node $i$ in layer $l$ is associated with weights $w_{ij}$ for all
+connections to nodes $j$ in layer $l+1$ along with a bias $b_i$. Figure 1 provides
+a visual diagram of a three-layer network, with one input layer, one hidden
+layer, and one output layer.</p>
+
+<div class="figure">
+    <img src="/assets/feed_forward.png" style="width: 50%; display: block; margin: 0 auto;" />
+    <div class="caption">
+        <span class="caption-label">Figure 1.</span> Diagram of a feedfoward
+        network with $L = 3$. This network has 3 input nodes, 4 hidden nodes, 
+        and 2 output nodes. Notation $w_{ij}$ represents the weight from node
+        $i$ to node $j$.
+    </div>
+</div>
+
+<p>Now that we can visualize feedforward networks, let’s dive into the math.
+Precisely, consider a dataset of pairs $(x, y)$. Nodes in layer $l$ compute
+weighted outputs</p>
+
+<script type="math/tex; mode=display">% <![CDATA[
+\begin{align}
+z_i^l = \begin{cases}
+          x_i & l = 1 \\
+          \sum_j w_{ji}^{l-1} a_j^{l-1} + b_i^l & \text{else}
+        \end{cases}
+\end{align} %]]></script>
+
+<p>and activations</p>
+
+<script type="math/tex; mode=display">a_i^l = \sigma(z_i^l)</script>
+
+<p>where subscripts denote indices within a layer, superscripts denote layer
+indices, and $\sigma(\cdot)$ is some nonlinearity. In simpler terms, node
+weighted outputs are either the network inputs in the first layer or a linear
+combination of the previous layer’s activations for all other layers. As
+mentioned before, activations introduce nonlinearities into the network.</p>
+
+<p>Ideally, we’d like the outputs of our network operating with input $x$ to be as
+close to the true label $y$; we quantify our success with a loss function
+$\mathcal{L}(a^L, y)$. Feedforward networks require two assumptions on the loss function
+for stochastic gradient descent:</p>
+
+<ol>
+  <li>
+    <p>The loss function can be written as an average $\mathcal{L} = \frac{1}{n} \sum \mathcal{L}_x$ for
+individual training examples $x$</p>
+  </li>
+  <li>
+    <p>The loss function can be written as a function of the outputs of the
+feedforward network, so that the derivative $\partial \mathcal{L}(a^L, y) /
+\partial a^L$ depends only on $a^L$.</p>
+  </li>
+</ol>
+
+<p><a href="https://en.wikipedia.org/wiki/Cross_entropy#Cross-entropy_minimization">Cross-entropy</a>
+is a typical loss function for classification problems, and <a href="https://en.wikipedia.org/wiki/Mean_squared_error#Regression">mean squared
+error</a> is typical
+for regression problems.</p>
+
+<h1 id="forward-propagation">Forward Propagation</h1>
+
+<p>Forward propagation is the process of forwarding an input $x$ through a feedfoward
+network to produce outputs $a^L$. We may compute these outputs systematically as
+follows:</p>
+
+<ol>
+  <li>
+    <p>Compute the activations of the input layer: for each $i$, compute
+<script type="math/tex">a_i^1 = \sigma(x_i)</script></p>
+  </li>
+  <li>
+    <p>Compute the activations of all remaining layers in order: for $l = 2 \dots L$, compute</p>
+  </li>
+</ol>
+
+<script type="math/tex; mode=display">a_i^l = \sigma \left( \sum_j w_{ji}^{l-1} a_j^{l-1} + b_i^l \right)</script>
+
+<p>We now see why this process is called “forward propagation”: computation
+propagates from the first layer to the final layer in the network. Note that
+we can write step (2) in terms of matrix operations to speed up computation;
+if we treat the nonlinearity $\sigma$ as an elementwise operator, we have
+that</p>
+
+<script type="math/tex; mode=display">\mathbf{a}^l = \sigma \left( \mathbf{w}^{T^{l-1}} \mathbf{a}^{l-1} + \mathbf{b}^l \right)</script>
+
+<p>If you’re having trouble with the transpose, consider an example with $n$ nodes
+in the input layer $l-1$ and $m$ nodes in the output layer. By definition,
+we have $\mathbf{w}^{l-1} \in \mathbf{R}^{n \times m}, \mathbf{a}^{l-1} \in
+\mathbf{R}^{n \times 1}, \mathbf{b}^l \in \mathbf{R}^{m \times 1}$. For the
+multiplication to work out (yielding output $\mathbf{a}^l \in \mathbf{R}^{m
+\times 1}$), we need the transpose.</p>
+
+<h1 id="backward-propagation">Backward Propagation</h1>
+
+<p>Now that we know how to obtain an output from our network, the next step is to
+update the parameters (weights and biases) of the network to yield a desirable
+output as per the loss function $\mathcal{L}$. A classical way to do so is to
+update each parameter in the negative direction of its gradient with respect to
+$\mathcal{L}$; this would achieve the global minimum of $\mathcal{L}$ for convex
+$\mathcal{L}$, but does reasonably well in non-convex cases as well.</p>
+
+<p>It’s easy to estimate the gradients of $\mathcal{L}$ with respect to each weight
+and bias empirically. Specifically, let $\mathcal{L}’(x)$ be the loss value with
+$w_{ji}^{l’} \leftarrow w_{ji}^l + \delta$; we can compute</p>
+
+<script type="math/tex; mode=display">\frac {\partial \mathcal{L}}{\partial w_{ji}^l} \approx \frac{\mathcal{L}'(x) -
+\mathcal{L}(x)}{\delta}</script>
+
+<p>and update $w_{ji}^l = w_{ji}^l - \gamma \frac {\partial \mathcal{L}}{\partial
+w_{ji}^l}$ for some small, fixed learning rate $\gamma$. But there are obvious
+problems with this approach: we’d have to perform forward propagation once for
+every weight (and bias) in the network, an extremely expensive process.</p>
+
+<p>Backward propagation attempts to remedy such computational inefficiencies by
+updating weights in one backward pass through the network. To do so, we make
+extensive use of the <a href="https://en.wikipedia.org/wiki/Chain_rule">chain rule</a>.
+Let’s start by computing partials of the loss function with respect to the
+network weights and biases. We can write</p>
+
+<script type="math/tex; mode=display">% <![CDATA[
+\begin{align}
+\frac{ \partial \mathcal{L}}{\partial w_{ji}^l} &= \frac{\partial
+\mathcal{L}}{\partial z_i^{l+1}} \frac{\partial z_i^{l+1}}{\partial w_{ji}^l} \\
+\frac{ \partial \mathcal{L}}{\partial b_{i}^l} &= \frac{\partial
+\mathcal{L}}{\partial z_i^{l+1}} \frac{\partial z_i^{l+1}}{\partial b_i^l}
+\end{align} %]]></script>
+
+<p>where we take the partial with respect to $z_i^{l+1}$ as $z_i^{l+1} = \sum_j
+w_{ji}^l a_j^l + b_i^{l+1}$. Since we have an explicit relationship between
+$z_i^{l+1}$ and $w_{ji}^l$, we can write</p>
+
+<script type="math/tex; mode=display">\boxed{ \frac{ \partial \mathcal{L}}{\partial w_{ji}^l} = \frac{\partial
+\mathcal{L}}{\partial z_i^{l+1}} a_j^l }</script>
+
+<p>and</p>
+
+<script type="math/tex; mode=display">\boxed{ \frac{ \partial \mathcal{L}}{\partial b_i^l} = \frac{\partial
+\mathcal{L}}{\partial z_i^{l+1}} }</script>
+
+<p>In both cases, we’ll need to compute $\partial \mathcal{L} / \partial
+z_i^l$. We can express</p>
+
+<script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial z_i^l} = \frac{ \partial
+\mathcal{L}}{\partial a_i^l} \frac{\partial a_i^l}{\partial z_i^l}</script>
+
+<p>where we take the partial with respect to $a_i^l$ as $a_i^l = \sigma(z_i^l)$.
+Since we have an explicit relationship between $a_i^l$ and $z_i^l$, we can write</p>
+
+<script type="math/tex; mode=display">\boxed{ \frac{\partial \mathcal{L}}{\partial z_i^l} = \frac{ \partial
+\mathcal{L}}{\partial a_i^l} \sigma'(z_i^l) }</script>
+
+<p>Finally, we have to deal with the $\partial \mathcal{L} / \partial a_i^l$ term;
+this is where the “backpropagation” term comes into play. Note that for $l = L$,
+we know that the partial is just a derivative of $\mathcal{L}(a^L, y)$, which
+we can analytically compute. Now for a layer $l \neq L$, we have that</p>
+
+<script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial a_i^l} = \sum_k \frac{\partial
+\mathcal{L}}{\partial z_k^{l+1}} \frac{\partial z_k^{l+1}}{\partial a_i^l}</script>
+
+<p>where we take the partial with respect to all $z_k^{l+1}$ in the subsequent
+layer as all such terms depend on the activation $a_i^l$ via the relationship
+$z_k^{l+1} = \sum_j w_{jk}^{l} a_j^l + b_k^{l+1}$. Since we have an explicit
+relationship between $z_k^{l+1}$ and $a_i^l$, we can write</p>
+
+<script type="math/tex; mode=display">\boxed{ \frac{\partial \mathcal{L}}{\partial a_i^l} = \sum_k \frac{\partial
+\mathcal{L}}{\partial z_k^{l+1}}  w_{ji}^l }</script>
+
+<p>Since we can compute $\partial \mathcal{L} / \partial z_k^L$, and since every
+layer’s partials depend on the layer after it, all that’s left to do is
+sequentially iterate backward through the network, computing partials as we
+go—hence, backward propagation.</p>
+
+<h3 id="the-backprop-algorithm">The Backprop Algorithm</h3>
+
+<p>Our algorithm thus proceeds as follows. We begin by compute the partial
+derivatives of the loss function with respect to the activations of the final
+layer ($L$); this is $\partial \mathcal{L} / \partial a_i^L$.</p>
+
+<p>For layers $l = L \dots 1$ (all layers aside from the input), we:</p>
+
+<ol>
+  <li>
+    <p>Compute the partial derivative of the loss function with respect to neuron
+inputs</p>
+
+    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial z_i^l} = \frac{ \partial
+ \mathcal{L}}{\partial a_i^l} \sigma'(z_i^l)</script>
+
+    <p>If we treat $\sigma( \cdot )$ as an elementwise operator and $\odot$ as the
+ Hadamard (elementwise) matrix product, we can write this step as</p>
+
+    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial \mathbf{z}} = \frac{ \partial
+ \mathcal{L}}{\partial \mathbf{a}} \odot \sigma'(\mathbf{z}^l)</script>
+  </li>
+  <li>
+    <p>Backpropagate the error: compute the partial derivative of the loss function
+with respect to the activations of the previous layer</p>
+
+    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial a_i^{l-1}} = \sum_k \frac{\partial
+ \mathcal{L}}{\partial z_k^l}  w_{ji}^l</script>
+
+    <p>This step can be written in terms of matrix operations as</p>
+
+    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial \mathbf{a}^{l-1}} =
+ \left(\mathbf{w}^{T^l} \right) \frac{\partial \mathcal{L}}{\partial
+ \mathbf{z}}</script>
+
+    <p>Note that since there’s no layer to backpropagate error to for $l = 1$, we don’t
+perform this step for the input layer.</p>
+  </li>
+</ol>
+
+<p>We now have $\partial \mathcal{L} / \partial a_i^l$ for all layers $l$, and so
+we can compute the partial derivatives for all weights and biases, completing
+our update.</p>
+
+    </div>
+    <div id='bibliography'>
+        <div class='wrap'>
+            <ol class="bibliography"></ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>
