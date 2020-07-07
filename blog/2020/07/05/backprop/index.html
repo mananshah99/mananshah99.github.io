@@ -47,7 +47,7 @@ MathJax.Hub.Config({
             <div class='bylines'>
                 <div class='byline'>
                     <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
-                    <p>01 July 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-learning</p>
+                    <p>05 July 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-learning</p>
                 </div>
             </div>
             <div class='clear'></div>
@@ -62,7 +62,7 @@ This post was inspired by, and some of its content was derived from,
 <a href="https://andrew.gibiansky.com/blog/machine-learning/fully-connected-neural-networks/">these</a>
 <a href="http://neuralnetworksanddeeplearning.com/chap2.html">two</a> excellent resources.</p>
 
-<h1 id="introduction-and-notation">Introduction and Notation</h1>
+<h2 id="introduction-and-notation">Introduction and Notation</h2>
 
 <p>For the duration of this post, we’ll consider a feedforward network with $L$
 layers indexed $l = 1 \dots L$ as in the diagram below. Each node in a
@@ -87,7 +87,7 @@ a visual diagram of a three-layer network, with one input layer, one hidden
 layer, and one output layer.</p>
 
 <div class="figure">
-    <img src="/assets/feed_forward.png" style="width: 50%; display: block; margin: 0 auto;" />
+    <img src="/assets/feed_forward.png" style="width: 60%; display: block; margin: 0 auto;" />
     <div class="caption">
         <span class="caption-label">Figure 1.</span> Diagram of a feedfoward
         network with $L = 3$. This network has 3 input nodes, 4 hidden nodes, 
@@ -104,7 +104,7 @@ weighted outputs</p>
 \begin{align}
 z_i^l = \begin{cases}
           x_i & l = 1 \\
-          \sum_j w_{ji}^{l-1} a_j^{l-1} + b_i^l & \text{else}
+          \sum_j w_{ji}^l a_j^{l-1} + b_i^l & \text{else}
         \end{cases}
 \end{align} %]]></script>
 
@@ -140,7 +140,7 @@ is a typical loss function for classification problems, and <a href="https://en.
 error</a> is typical
 for regression problems.</p>
 
-<h1 id="forward-propagation">Forward Propagation</h1>
+<h2 id="forward-propagation">Forward Propagation</h2>
 
 <p>Forward propagation is the process of forwarding an input $x$ through a feedfoward
 network to produce outputs $a^L$. We may compute these outputs systematically as
@@ -156,24 +156,24 @@ follows:</p>
   </li>
 </ol>
 
-<script type="math/tex; mode=display">a_i^l = \sigma \left( \sum_j w_{ji}^{l-1} a_j^{l-1} + b_i^l \right)</script>
+<script type="math/tex; mode=display">a_i^l = \sigma \left( \sum_j w_{ji}^l a_j^{l-1} + b_i^l \right)</script>
 
-<p>We now see why this process is called “forward propagation”: computation
-propagates from the first layer to the final layer in the network. Note that
-we can write step (2) in terms of matrix operations to speed up computation;
-if we treat the nonlinearity $\sigma$ as an elementwise operator, we have
-that</p>
+<p>where the sum is over all nodes $j$ in layer $l-1$. We now see why this process
+is called “forward propagation”: computation propagates from the first layer to
+the final layer in the network. Note that we can write step (2) in terms of
+matrix operations to speed up computation; if we treat the nonlinearity $\sigma$
+as an elementwise operator, we have that</p>
 
-<script type="math/tex; mode=display">\mathbf{a}^l = \sigma \left( \mathbf{w}^{T^{l-1}} \mathbf{a}^{l-1} + \mathbf{b}^l \right)</script>
+<script type="math/tex; mode=display">\mathbf{a}^l = \sigma \left( \mathbf{w}^{T^l} \mathbf{a}^{l-1} + \mathbf{b}^l \right)</script>
 
 <p>If you’re having trouble with the transpose, consider an example with $n$ nodes
 in the input layer $l-1$ and $m$ nodes in the output layer. By definition,
-we have $\mathbf{w}^{l-1} \in \mathbf{R}^{n \times m}, \mathbf{a}^{l-1} \in
+we have $\mathbf{w}^l \in \mathbf{R}^{n \times m}, \mathbf{a}^{l-1} \in
 \mathbf{R}^{n \times 1}, \mathbf{b}^l \in \mathbf{R}^{m \times 1}$. For the
 multiplication to work out (yielding output $\mathbf{a}^l \in \mathbf{R}^{m
 \times 1}$), we need the transpose.</p>
 
-<h1 id="backward-propagation">Backward Propagation</h1>
+<h2 id="backward-propagation">Backward Propagation</h2>
 
 <p>Now that we know how to obtain an output from our network, the next step is to
 update the parameters (weights and biases) of the network to yield a desirable
@@ -203,22 +203,22 @@ network weights and biases. We can write</p>
 <script type="math/tex; mode=display">% <![CDATA[
 \begin{align}
 \frac{ \partial \mathcal{L}}{\partial w_{ji}^l} &= \frac{\partial
-\mathcal{L}}{\partial z_i^{l+1}} \frac{\partial z_i^{l+1}}{\partial w_{ji}^l} \\
+\mathcal{L}}{\partial z_i^l} \frac{\partial z_i^l}{\partial w_{ji}^l} \\
 \frac{ \partial \mathcal{L}}{\partial b_{i}^l} &= \frac{\partial
-\mathcal{L}}{\partial z_i^{l+1}} \frac{\partial z_i^{l+1}}{\partial b_i^l}
+\mathcal{L}}{\partial z_i^l} \frac{\partial z_i^l}{\partial b_i^l}
 \end{align} %]]></script>
 
-<p>where we take the partial with respect to $z_i^{l+1}$ as $z_i^{l+1} = \sum_j
-w_{ji}^l a_j^l + b_i^{l+1}$. Since we have an explicit relationship between
+<p>where we take the partial with respect to $z_i^l$ as $z_i^l = \sum_j
+w_{ji}^l a_j^{l-1} + b_i^l$. Since we have an explicit relationship between
 $z_i^{l+1}$ and $w_{ji}^l$, we can write</p>
 
 <script type="math/tex; mode=display">\boxed{ \frac{ \partial \mathcal{L}}{\partial w_{ji}^l} = \frac{\partial
-\mathcal{L}}{\partial z_i^{l+1}} a_j^l }</script>
+\mathcal{L}}{\partial z_i^l} a_j^{l-1} }</script>
 
 <p>and</p>
 
 <script type="math/tex; mode=display">\boxed{ \frac{ \partial \mathcal{L}}{\partial b_i^l} = \frac{\partial
-\mathcal{L}}{\partial z_i^{l+1}} }</script>
+\mathcal{L}}{\partial z_i^l} }</script>
 
 <p>In both cases, we’ll need to compute $\partial \mathcal{L} / \partial
 z_i^l$. We can express</p>
@@ -242,11 +242,11 @@ we can analytically compute. Now for a layer $l \neq L$, we have that</p>
 
 <p>where we take the partial with respect to all $z_k^{l+1}$ in the subsequent
 layer as all such terms depend on the activation $a_i^l$ via the relationship
-$z_k^{l+1} = \sum_j w_{jk}^{l} a_j^l + b_k^{l+1}$. Since we have an explicit
+$z_k^{l+1} = \sum_j w_{jk}^{l+1} a_j^l + b_k^{l+1}$. Since we have an explicit
 relationship between $z_k^{l+1}$ and $a_i^l$, we can write</p>
 
 <script type="math/tex; mode=display">\boxed{ \frac{\partial \mathcal{L}}{\partial a_i^l} = \sum_k \frac{\partial
-\mathcal{L}}{\partial z_k^{l+1}}  w_{ji}^l }</script>
+\mathcal{L}}{\partial z_k^{l+1}}  w_{ji}^{l+1} }</script>
 
 <p>Since we can compute $\partial \mathcal{L} / \partial z_k^L$, and since every
 layer’s partials depend on the layer after it, all that’s left to do is
@@ -263,7 +263,7 @@ layer ($L$); this is $\partial \mathcal{L} / \partial a_i^L$.</p>
 
 <ol>
   <li>
-    <p>Compute the partial derivative of the loss function with respect to neuron
+    <p>Compute the partial derivative of the loss function with respect to node
 inputs</p>
 
     <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial z_i^l} = \frac{ \partial
@@ -272,8 +272,8 @@ inputs</p>
     <p>If we treat $\sigma( \cdot )$ as an elementwise operator and $\odot$ as the
  Hadamard (elementwise) matrix product, we can write this step as</p>
 
-    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial \mathbf{z}} = \frac{ \partial
- \mathcal{L}}{\partial \mathbf{a}} \odot \sigma'(\mathbf{z}^l)</script>
+    <script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial \mathbf{z}^l} = \frac{ \partial
+ \mathcal{L}}{\partial \mathbf{a}^l} \odot \sigma'(\mathbf{z}^l)</script>
   </li>
   <li>
     <p>Backpropagate the error: compute the partial derivative of the loss function
