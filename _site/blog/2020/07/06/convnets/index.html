@@ -58,7 +58,7 @@ MathJax.Hub.Config({
 networks, and claim that a similar approach can be applied to convolutional
 networks without any additional justification. Here, I methodically derive
 backpropagation for convolutional networks. The notation used and general
-structure of this post is similar to <a href="https://mananshah99.github.io/blog/2020/07/01/backprop/">my derivation of backpropagation for
+structure of this post is similar to <a href="https://mananshah99.github.io/blog/2020/07/06/backprop/">my derivation of backpropagation for
 feedforward networks</a>,
 which functions as an excellent introduction to backpropagation if the reader is
 not familiar with such concepts.</p>
@@ -205,7 +205,7 @@ and output the resulting layer with reduced size.</p>
 
 <p>That’s it! Let’s now move on to deriving the backpropagation rules for these
 layer updates. We’ll follow a similar procedure to the derivation for feedfoward
-networks <a href="https://mananshah99.github.io/blog/2020/07/01/backprop/">here</a>.</p>
+networks <a href="https://mananshah99.github.io/blog/2020/07/06/backprop/">here</a>.</p>
 
 <h2 id="backward-propagation">Backward Propagation</h2>
 
@@ -293,7 +293,7 @@ acquires an error, and the error is forwarded back to the node it came from
 “sentinel” values that remember which node was chosen in the forward propagation
 step of maximum pooling.</p>
 
-<p>The backpropagation algorithm is now identical to the one presented in <a href="https://mananshah99.github.io/blog/2020/07/01/backprop/">the
+<p>The backpropagation algorithm is now identical to the one presented in <a href="https://mananshah99.github.io/blog/2020/07/06/backprop/">the
 derivation for feedforward
 networks</a>, where we
 first compute the partial derivative of $\mathcal{L}$ with respect to the node
