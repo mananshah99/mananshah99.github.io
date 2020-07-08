@@ -192,7 +192,7 @@ output for feature map $m$ as</p>
 
 <script type="math/tex; mode=display">z^{l}_{i, j, m} = \sum_{a = 0}^{d-1} \sum_{b = 0}^{d-1} \sum_{c = 0}^{t - 1} w^{l, m}_{a, b, c} a^{l-1}_{(i + a), (j + b), c} + b^{l,m}</script>
 
-<p>which is effectively a Hadamard product between the (shared) weight matrix and
+<p>which is effectively a discrete convolution between the (shared) weight matrix and
 the relevant slice of the input nodes. The activations are thus</p>
 
 <script type="math/tex; mode=display">a^{l}_{i, j, m} = \sigma (z_{i, j, m}^{l})</script>
