@@ -73,15 +73,15 @@ and
 <p>To begin, consider the C compiler, which is bootstrapped and written in C. 
 For simplicity, let the compiler routine be represented as follows.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
 {
   /* Do regular compilation things */
   ...
 }
 </code></pre></div></div>
 
-<p>The Unix kernel has a <code class="highlighter-rouge">login</code> command that accepts an encrypted password and
-compares it to the stored user password in <code class="highlighter-rouge">/etc/password</code>, allowing access on a
+<p>The Unix kernel has a <code class="language-plaintext highlighter-rouge">login</code> command that accepts an encrypted password and
+compares it to the stored user password in <code class="language-plaintext highlighter-rouge">/etc/password</code>, allowing access on a
 match and rejecting access otherwise. Say we wanted to insert a backdoor into
 this command, which would accept either the encrypted password or a particular
 known password. Doing so would allow a third-party user to gain access to any
@@ -93,7 +93,7 @@ system given knowledge of this additional acceptable password.</p>
 compile the backdoor instead of the traditional login code, but behave normally
 in all other situations. In particular, our modification might look like</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
 {
   /* If the code we're compiling is code for the Unix login command */
   if (match (code, login_code_pattern))
@@ -126,7 +126,7 @@ the compiled assembly code).</p>
 executed when the compiler compiles itself. In particular, when the compiler is
 asked to compile itself, it instead compiles a version of itself with the login
 backdoor and the malicious program inserted. To summarize, our compiler now
-includes two new procedures: <sup id="fnref:1"><a href="#fn:1" class="footnote">1</a></sup></p>
+includes two new procedures: <sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup></p>
 <ol>
   <li>If asked to compile the Unix kernel login code, it instead compiles the
 backdoor code</li>
@@ -143,7 +143,7 @@ compiled. Programs that can do so are called
 
 <p>Our resulting compiler looks like</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>compile (code)
 {
   /* If the code we're compiling is code for the Unix login command */
   if (match (code, login_code_pattern))
@@ -199,10 +199,10 @@ be almost impossible to detect.</p>
 </blockquote>
 
 <h3 id="notes">Notes</h3>
-<div class="footnotes">
+<div class="footnotes" role="doc-endnotes">
   <ol>
-    <li id="fn:1">
-      <p>Technically, both of these steps require solving the Halting problem — to determine whether two sources do the same thing, you’d have to prove that they both halt in the same circumstances — but a semantically similar match for login/compiler source code is likely enough in practice. <a href="#fnref:1" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:1" role="doc-endnote">
+      <p>Technically, both of these steps require solving the Halting problem — to determine whether two sources do the same thing, you’d have to prove that they both halt in the same circumstances — but a semantically similar match for login/compiler source code is likely enough in practice. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
 </div>

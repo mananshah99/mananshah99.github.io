@@ -111,12 +111,12 @@ which specifies $z \sim \text{Categorical}(1 \dots k)$ and $p(x \mid z = k) =
 <p>To learn such a model via maximum likelihood, we hope to solve the optimization
 problem</p>
 
-<script type="math/tex; mode=display">\text{argmax}_\theta \prod_{x \in \mathcal{D}}  p(x; \theta)
-= \text{argmax}_\theta \prod_{x \in \mathcal{D}} \sum_{z} p(x, z; \theta)</script>
+\[\text{argmax}_\theta \prod_{x \in \mathcal{D}}  p(x; \theta)
+= \text{argmax}_\theta \prod_{x \in \mathcal{D}} \sum_{z} p(x, z; \theta)\]
 
 <p>Our log-likelihood function is therefore</p>
 
-<script type="math/tex; mode=display">\ell(\theta; \mathcal{D}) = \sum_{x \in \mathcal{D}} \log \sum_z p(x, z; \theta)</script>
+\[\ell(\theta; \mathcal{D}) = \sum_{x \in \mathcal{D}} \log \sum_z p(x, z; \theta)\]
 
 <p>which does not admit a decomposition conducive to optimization due to the
 summation within the logarithm.</p>
@@ -129,9 +129,9 @@ estimate</a> of the
 inner sum by sampling $z$ at random and approximating the inner sum with a
 sample average:</p>
 
-<script type="math/tex; mode=display">\sum_z p(x, z; \theta) = |\mathcal{Z}| \sum_z \frac{1}{|\mathcal{Z}|} p(x, z;
+\[\sum_z p(x, z; \theta) = |\mathcal{Z}| \sum_z \frac{1}{|\mathcal{Z}|} p(x, z;
 \theta)  = |\mathcal{Z}| \mathbf{E}_{z \sim \text{Uniform}(\mathcal{Z})} p(x, z;
-\theta)</script>
+\theta)\]
 
 <p>While this works in theory, in practice such estimates tend to perform poorly
 as the search space increases exponentially and the majority of randomly
@@ -139,9 +139,9 @@ selected $z$s yield a small joint probability. A second, more intricate, attempt
 via <a href="https://en.wikipedia.org/wiki/Importance_sampling">importance sampling</a>
 with proposal distribution $q(z \mid x)$ yields</p>
 
-<script type="math/tex; mode=display">\begin{align}
+\[\begin{align}
 \sum_z p(x, z; \theta) = \sum_z q(z \mid x) \frac{p(x, z; \theta)}{q(z \mid x)} = \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]
-\end{align}</script>
+\end{align}\]
 
 <p>where we again approximate the expectation with a sample average, this time from
 the proposal distribution $q(z \mid x)$. Doing so alleviates the issue of few
@@ -152,12 +152,12 @@ an appropriate choice of $q(z \mid x)$.</p>
 $z \sim p(z \mid x; \theta)$ to choose likely values of the latent variables,
 and so a reasonable choice would be $q(z \mid x) = p (z \mid x; \theta)$. Since
 we’re working with shallow LVMs, we can safely assume this is a simple
-distribution we can sample from (we can compute it with Bayes’ theorem). <sup id="fnref:1"><a href="#fn:1" class="footnote">1</a></sup></p>
+distribution we can sample from (we can compute it with Bayes’ theorem). <sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup></p>
 
 <p>However, while this approach allows us to decompose the joint distribution $p(x,
 z; \theta)$, writing the log-likelihood function yields</p>
 
-<script type="math/tex; mode=display">\ell(\theta) = \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]</script>
+\[\ell(\theta) = \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]\]
 
 <p>which presents us with another problem: it is difficult to optimize the logarithm
 of a sum.</p>
@@ -169,13 +169,12 @@ log-likelihood function, we apply <a href="https://en.wikipedia.org/wiki/Jensen%
 inequality</a>. Doing so
 provides us a lower bound on $\ell(\theta)$:</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\ell(\theta) &= \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \\
-             &\geq \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim q(z \mid x)} \log \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \label{jensen} \tag{1} \\
-             &=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} \label{a} \tag{2} \\
-             &=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log p(x, z; \theta) - \sum_{x \in \mathcal{D}} \sum_z q(z \mid x) \log q(z \mid x) \label{elbo} \tag{3} \\
-\end{align} %]]></script>
+\[\begin{align}
+\ell(\theta) &amp;= \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \\
+             &amp;\geq \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim q(z \mid x)} \log \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \label{jensen} \tag{1} \\
+             &amp;=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} \label{a} \tag{2} \\
+             &amp;=  \sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log p(x, z; \theta) - \sum_{x \in \mathcal{D}} \sum_z q(z \mid x) \log q(z \mid x) \label{elbo} \tag{3} \\
+\end{align}\]
 
 <p>where Equation \ref{jensen} is by Jensen. We have therefore arrived at a lower
 bound for the likelihood $\ell(\theta)$ that’s optimizable! In fact, the lower
@@ -187,13 +186,12 @@ x)$. However, as it turns out, our intuitive choice of $q(z \mid x) = p(z \mid
 x; \theta)$ has a beautiful property: it makes the bound tight! For proof,
 substituting this distribution in Equation \ref{a} yields</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} &= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(x, z; \theta)}{p(z \mid x)} \\
-&= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(z \mid x) p(x)}{p(z \mid x)} \\
-&= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log p (x) \\
-&= \ell(\theta)
-\end{align} %]]></script>
+\[\begin{align}
+\sum_{x \in \mathcal{D}} \sum_z  q(z \mid x) \log \frac{p(x, z; \theta)}{q(z \mid x)} &amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(x, z; \theta)}{p(z \mid x)} \\
+&amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log \frac{p(z \mid x) p(x)}{p(z \mid x)} \\
+&amp;= \sum_{x \in \mathcal{D}} \sum_z  p(z \mid x) \log p (x) \\
+&amp;= \ell(\theta)
+\end{align}\]
 
 <p>as desired. As a result, choosing $q(z \mid x) = p(z \mid x; \theta)$ guarantees
 that optimizing the ELBO always increases the likelihood.</p>
@@ -217,7 +215,7 @@ particular, the algorithm proceeds as follows:</p>
   <li>Repeat until convergence:</li>
 </ul>
 
-<script type="math/tex; mode=display">\theta_{t+1} = \text{argmax}_\theta \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim p(z \mid x; \theta_t)} \log p(x, z; \theta)</script>
+\[\theta_{t+1} = \text{argmax}_\theta \sum_{x \in \mathcal{D}} \mathbf{E}_{z \sim p(z \mid x; \theta_t)} \log p(x, z; \theta)\]
 
 <p>which is broken down into the ‘‘E’’ and ‘‘M’’ steps as follows.</p>
 
@@ -271,11 +269,11 @@ arbitrary choice of $q(z)$, we can express the
 <a href="https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence">KL-divergence</a>
 between $q(z)$ and $p(z \mid x; \theta)$ as</p>
 
-<script type="math/tex; mode=display">D_{KL} (q(z) \| p(z \mid x; \theta)) = -\sum_z q(z) \log p(z, x; \theta) + \log p(x; \theta) - \sum_z q(z) \log q(z) \geq 0</script>
+\[D_{KL} (q(z) \| p(z \mid x; \theta)) = -\sum_z q(z) \log p(z, x; \theta) + \log p(x; \theta) - \sum_z q(z) \log q(z) \geq 0\]
 
 <p>which we rearrange to obtain</p>
 
-<script type="math/tex; mode=display">\ell (\theta) = \log p(x; \theta) = \underbrace{\sum_z q(z) \log p(z, x; \theta) - \sum_z q(z) \log q(z)}_{\text{ELBO}} + D_{KL} (q(z) \| p(z \mid x; \theta))</script>
+\[\ell (\theta) = \log p(x; \theta) = \underbrace{\sum_z q(z) \log p(z, x; \theta) - \sum_z q(z) \log q(z)}_{\text{ELBO}} + D_{KL} (q(z) \| p(z \mid x; \theta))\]
 
 <p>As expected, setting $q(z) = p(z \mid x; \theta)$ makes the ELBO tight since the
 KL-divergence between identical distributions is zero. More importantly, since
@@ -284,7 +282,7 @@ motivates a <em>variational</em> learning algorithm: can we learn a tractable
 distribution $q(z; \phi)$ to closely approximate $p(z \mid x; \theta)$? Doing so
 would tighten the ELBO, improving our ability to increase $\ell(\theta)$.</p>
 
-<p>This process is termed variational learning <sup id="fnref:2"><a href="#fn:2" class="footnote">2</a></sup> as it involves the optimization
+<p>This process is termed variational learning <sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> as it involves the optimization
 of $q(z; \phi)$ in function space. Jointly optimizing over our original
 paramters $\theta$ and our variational parameters $\phi$ thus provides a
 reasonable way to maximize the ELBO over a dataset.</p>
@@ -294,31 +292,29 @@ reasonable way to maximize the ELBO over a dataset.</p>
 <p>Building upon the intuition derived in the previous section, we can write the
 ELBO with variational parameters as</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\mathcal{L}(x; \theta, \phi) &= \sum_z q(z; \phi) \log p(z, x; \theta) - \sum_z q(z; \phi) \log q (z; \phi) \\
-                             &= \mathbf{E}_{z \sim q(z; \phi)} [\log p(z, x; \theta) - \log q (z; \phi)]
-\end{align} %]]></script>
+\[\begin{align}
+\mathcal{L}(x; \theta, \phi) &amp;= \sum_z q(z; \phi) \log p(z, x; \theta) - \sum_z q(z; \phi) \log q (z; \phi) \\
+                             &amp;= \mathbf{E}_{z \sim q(z; \phi)} [\log p(z, x; \theta) - \log q (z; \phi)]
+\end{align}\]
 
 <p>Our new form of maximum likelihood learning over our dataset is to maximize a
 lower bound to $\ell(\theta)$:</p>
 
-<script type="math/tex; mode=display">\ell (\theta) = \sum_{x^{(i)} \in \mathcal{D}} \log p(x^{(i)}; \theta) \geq \sum_{x^{(i)} \in \mathcal{D}} \mathcal{L}(x^{(i)}; \theta, \phi^{(i)})</script>
+\[\ell (\theta) = \sum_{x^{(i)} \in \mathcal{D}} \log p(x^{(i)}; \theta) \geq \sum_{x^{(i)} \in \mathcal{D}} \mathcal{L}(x^{(i)}; \theta, \phi^{(i)})\]
 
 <p>where we note that each data point $x^{(i)}$ has an associated set of
 variational parameters $\phi^{(i)}$ as the true posterior $p(z \mid x^{(i)};
 \theta)$ is different for each data point $x^{(i)}$. Doing so can be challenging
 for large datasets (where such large numbers of parameters makes optimization
 expensive), so we instead choose to learn how to map each $x^{(i)}$ to a good
-set of parameters $\phi^{(i)}$ via a function $f_\lambda$.<sup id="fnref:3"><a href="#fn:3" class="footnote">3</a></sup> Specifically, we work
+set of parameters $\phi^{(i)}$ via a function $f_\lambda$.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup> Specifically, we work
 with $q(z; f_\lambda(x))$ for each $x$; in the literature (and for the remainder
 of this post), we write $q(z; f_\lambda(x))$ as $q(z \mid x; \lambda)$. Our ELBO
 thus has the form</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\mathcal{L}(x; \theta, \lambda) &= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
-\end{align} %]]></script>
+\[\begin{align}
+\mathcal{L}(x; \theta, \lambda) &amp;= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
+\end{align}\]
 
 <p>We optimize the ELBO with gradient descent, updating both the model parameters
 $\theta$ and the variational parameters $\lambda$. Our learning algorithm is therefore</p>
@@ -337,20 +333,18 @@ compute the gradients of the ELBO with respect to $\theta$ and $\lambda$.</p>
 
 <p>Let’s first examine the gradient with respect to $\theta$. We simply have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\nabla_\theta \mathcal{L}(x; \theta, \lambda) &= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)] \\
-                                              &= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\nabla_\theta \log p(z, x; \theta)]
-\end{align} %]]></script>
+\[\begin{align}
+\nabla_\theta \mathcal{L}(x; \theta, \lambda) &amp;= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)] \\
+                                              &amp;= \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\nabla_\theta \log p(z, x; \theta)]
+\end{align}\]
 
 <p>which we can approximate with Monte Carlo sampling from $q(z \mid x; \lambda)$.</p>
 
 <p>Let’s next consider the gradient with respect to $\lambda$. We have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\nabla_\lambda \mathcal{L}(x; \theta, \lambda) &= \nabla_\lambda \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
-\end{align} %]]></script>
+\[\begin{align}
+\nabla_\lambda \mathcal{L}(x; \theta, \lambda) &amp;= \nabla_\lambda \mathbf{E}_{z \sim q(z \mid x; \lambda)} [\log p(z, x; \theta) - \log q(z \mid x; \lambda)]
+\end{align}\]
 
 <p>but we can’t simply pass the gradient through the expectation as before since the
 expectation is itself parameterized by $\lambda$. We can solve this problem in two
@@ -360,7 +354,7 @@ excellent article explaining and comparing the two is
 <a href="http://stillbreeze.github.io/REINFORCE-vs-Reparameterization-trick/">here</a>:
 REINFORCE yields</p>
 
-<script type="math/tex; mode=display">\nabla_\lambda \mathcal{L}(x; \theta, \lambda) = \mathbf{E}_{z \sim q(z \mid x; \lambda)} [(\log p(z, x; \theta) - \log q(z \mid x; \lambda)) \nabla_\lambda \log q(z \mid x; \lambda)]</script>
+\[\nabla_\lambda \mathcal{L}(x; \theta, \lambda) = \mathbf{E}_{z \sim q(z \mid x; \lambda)} [(\log p(z, x; \theta) - \log q(z \mid x; \lambda)) \nabla_\lambda \log q(z \mid x; \lambda)]\]
 
 <p>while the reparametrization trick varies depending on the choice of $q(z \mid x;
 \lambda)$ (and only works for continuous $q$ with specific properties); further
@@ -380,9 +374,9 @@ $z$, and $p(x \mid z; \theta)$ acts as a ‘‘decoder’’ to the true data di
 as normal distributions as in <a class="citation" href="#kingma2013auto">(Kingma &amp; Welling, 2013)</a> allows for an analytical
 simplification of the ELBO as</p>
 
-<script type="math/tex; mode=display">\mathcal{L}(x; \theta, \lambda) = \underbrace{D_{KL} (q(z \mid x; \lambda) \|
+\[\mathcal{L}(x; \theta, \lambda) = \underbrace{D_{KL} (q(z \mid x; \lambda) \|
 p(z))}_{\text{Analytically compute this}} + \underbrace{\mathbf{E}_{z \sim q(z \mid x;
-\lambda)} \log p(x \mid z; \theta)}_{\text{Monte Carlo estimate this}}</script>
+\lambda)} \log p(x \mid z; \theta)}_{\text{Monte Carlo estimate this}}\]
 
 <p>This representation also has a nice interpretation: the first term encourages
 latent representations to be likely under the prior $p(z)$, and the second term
@@ -411,16 +405,16 @@ reader, normalizing flow models (using invertible transformations) and GANs
 
 <h2 id="notes">Notes</h2>
 
-<div class="footnotes">
+<div class="footnotes" role="doc-endnotes">
   <ol>
-    <li id="fn:1">
-      <p>If this worries you, that’s good! We throw away this assumption with deep latent variable models, but doing so makes learning far more complicated… <a href="#fnref:1" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:1" role="doc-endnote">
+      <p>If this worries you, that’s good! We throw away this assumption with deep latent variable models, but doing so makes learning far more complicated… <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:2">
-      <p>'’Variational’’ is a term borrowed from variational calculus; in our context, it refers to the process of optimizing over functions. <a href="#fnref:2" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:2" role="doc-endnote">
+      <p>'’Variational’’ is a term borrowed from variational calculus; in our context, it refers to the process of optimizing over functions. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:3">
-      <p>Learning a single parametric function $f_\lambda : x \to \phi$ that maps each $x$ to a set of variational parameters is called amortized inference, as the process of inferring $z$ given $x$ is amortized over all training examples for sake of tractability. <a href="#fnref:3" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:3" role="doc-endnote">
+      <p>Learning a single parametric function $f_\lambda : x \to \phi$ that maps each $x$ to a set of variational parameters is called amortized inference, as the process of inferring $z$ given $x$ is amortized over all training examples for sake of tractability. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
 </div>

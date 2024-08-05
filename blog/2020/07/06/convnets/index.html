@@ -114,7 +114,7 @@ to learn its own weight, convolutional networks impose the constraint that
 all nodes in layer $l + 1$ share the same weights and bias. In Figure 1, 
 this implies that the $j, k$th hidden node has output</p>
 
-<script type="math/tex; mode=display">a^{l+1}_{j, k} = \sigma \left( \sum_{a = 0}^1 \sum_{b = 0}^1 w^{l+1}_{a, b} a^l_{j + a, k + b} + b^{l+1} \right)</script>
+\[a^{l+1}_{j, k} = \sigma \left( \sum_{a = 0}^1 \sum_{b = 0}^1 w^{l+1}_{a, b} a^l_{j + a, k + b} + b^{l+1} \right)\]
 
 <p>where $w^{l+1}$ is the shared weight matrix, $a^l$ defines the input activations
 from layer $l$ to layer $l + 1$, and $b^{l+1}$ is the shared bias for layer $l$.
@@ -195,12 +195,12 @@ input. The weighted output of our convolutional layer is $\mathbf{z}^l \in
 \mathbf{R}^{(r - d + 1) \times (s - d + 1) \times M}$. We can write the weighted
 output for feature map $m$ as</p>
 
-<script type="math/tex; mode=display">z^{l}_{i, j, m} = \sum_{a = 0}^{d-1} \sum_{b = 0}^{d-1} \sum_{c = 0}^{t - 1} w^{l, m}_{a, b, c} a^{l-1}_{(i + a), (j + b), c} + b^{l,m}</script>
+\[z^{l}_{i, j, m} = \sum_{a = 0}^{d-1} \sum_{b = 0}^{d-1} \sum_{c = 0}^{t - 1} w^{l, m}_{a, b, c} a^{l-1}_{(i + a), (j + b), c} + b^{l,m}\]
 
 <p>which is effectively a discrete convolution between the (shared) weight matrix and
 the relevant slice of the input nodes. The activations are thus</p>
 
-<script type="math/tex; mode=display">a^{l}_{i, j, m} = \sigma (z_{i, j, m}^{l})</script>
+\[a^{l}_{i, j, m} = \sigma (z_{i, j, m}^{l})\]
 
 <p>for some nonlinearlity $\sigma (\cdot )$.</p>
 
@@ -222,15 +222,14 @@ output as per the loss function $\mathcal{L}$.</p>
 with respect to the network weights and biases. For weight $w^{l, m}_{a, b, c}$
 at layer $l$ in feature map $m$ and bias $b^l$, we have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\frac{\partial \mathcal{L}}{w^{l, m}_{a,b,c}} &= \sum_{i = 0}^{r
+\[\begin{align}
+\frac{\partial \mathcal{L}}{w^{l, m}_{a,b,c}} &amp;= \sum_{i = 0}^{r
   - d} \sum_{j = 0}^{s - d} \frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l}
   \frac{\partial z_{i,j,m}^l}{\partial w^{l, m}_{a,b,c}}  \\
-\frac{\partial \mathcal{L}}{b^{l, m}} &= \sum_{i = 0}^{r
+\frac{\partial \mathcal{L}}{b^{l, m}} &amp;= \sum_{i = 0}^{r
   - d} \sum_{j = 0}^{s - d} \frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l}
   \frac{\partial z_{i,j,m}^l}{\partial b^{l, m}}   
-\end{align} %]]></script>
+\end{align}\]
 
 <p>where we assume $w$ is a $d \times d \times t$ feature map and layer $l$ has
 dimensions $r \times s \times t$. The summations are involved as we must sum
@@ -240,29 +239,29 @@ corresponds to weight sharing in the convolutional network.</p>
 <p>Since we have an explicit relationship between $z_{i,j, m}^l$ and $w_{a,b,c}^{l,m}$,
 we can write</p>
 
-<script type="math/tex; mode=display">\boxed{\frac{\partial \mathcal{L}}{w^{l, m}_{a,b,c}} = \sum_{i = 0}^{r
+\[\boxed{\frac{\partial \mathcal{L}}{w^{l, m}_{a,b,c}} = \sum_{i = 0}^{r
   - d} \sum_{j = 0}^{s - d} \frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l}
-  a^{l-1}_{(i + a), (j + b), c} }</script>
+  a^{l-1}_{(i + a), (j + b), c} }\]
 
 <p>and</p>
 
-<script type="math/tex; mode=display">\boxed{\frac{\partial \mathcal{L}}{b^{l, m}} = \sum_{i = 0}^{r
-  - d} \sum_{j = 0}^{s - d} \frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l}}</script>
+\[\boxed{\frac{\partial \mathcal{L}}{b^{l, m}} = \sum_{i = 0}^{r
+  - d} \sum_{j = 0}^{s - d} \frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l}}\]
 
 <p>In both cases, we’ll need to compute $\frac{\partial \mathcal{L}}{\partial
 z_{i,j,m}^l}$. We can express</p>
 
-<script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l} = \frac{\partial
+\[\frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l} = \frac{\partial
 \mathcal{L}}{\partial a_{i,j,m}^l} \frac{\partial a_{i,j,m}^l}{\partial
-z_{i,j,m}^l}</script>
+z_{i,j,m}^l}\]
 
 <p>where we take the partial with respect to $a_{i,j,m}^l$ as $a_{i,j,m}^l =
 \sigma(z_{i,j,m}^l)$. Since we have an explicit relationship between $a_{i,j,m}^l$
 and $a_{i,j,m}^l$, we can write</p>
 
-<script type="math/tex; mode=display">\boxed{\frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l} =  \frac{\partial
+\[\boxed{\frac{\partial \mathcal{L}}{\partial z_{i,j,m}^l} =  \frac{\partial
 \mathcal{L}}{\partial a_{i,j,m}^l} \sigma'(z_{i,j,m}^l)
-}</script>
+}\]
 
 <p>Finally, we have to deal with the $\partial \mathcal{L} / \partial
 a_{i,j,m}^l$ term; this is where the “backpropagation” term comes into play.
@@ -270,18 +269,18 @@ For the final layer in the network, we can analytically compute this term
 as $\mathcal{L}$ is a function of the activations of the last layer. For all
 other layers, we have that</p>
 
-<script type="math/tex; mode=display">\frac{\partial \mathcal{L}}{\partial a_{i,j,m}^l} = \sum_{a = 0}^{d'-1} \sum_{b =
+\[\frac{\partial \mathcal{L}}{\partial a_{i,j,m}^l} = \sum_{a = 0}^{d'-1} \sum_{b =
 0}^{d'-1} \sum_{k = 0}^K \frac{\partial \mathcal{L}}{\partial z_{(i-a),(j-b),k}^{l+1}} \frac{\partial
-z_{(i-a),(j-b),k}^{l+1}}{\partial a_{i,j,m}^l}</script>
+z_{(i-a),(j-b),k}^{l+1}}{\partial a_{i,j,m}^l}\]
 
 <p>where we assume $w^{l+1}$ is a $d’ \times d’ \times M$ feature map and layer
 $l+1$ uses $K$ feature maps. Since we have an explicit relationship between
 $z_{(i-a),(j-b),k}^{l+1}$ and $a_{i,j,m}^l$, we can write</p>
 
-<script type="math/tex; mode=display">\boxed{\frac{\partial \mathcal{L}}{\partial a_{i,j,m}^l} = \sum_{a = 0}^{d'-1}
+\[\boxed{\frac{\partial \mathcal{L}}{\partial a_{i,j,m}^l} = \sum_{a = 0}^{d'-1}
 \sum_{b = 0}^{d'-1} \sum_{k = 0}^K \frac{\partial \mathcal{L}}{\partial
 z_{(i-a),(j-b),k}^{l+1}} w_{a, b, m}^{l+1, k}
-}</script>
+}\]
 
 <p>which has an intuitive interpretation of propagating backward the errors of
 nodes in layer $l + 1$ that have connections to node $(i, j, m)$ in layer $l$.
