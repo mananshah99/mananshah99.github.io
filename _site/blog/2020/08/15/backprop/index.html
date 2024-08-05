@@ -68,7 +68,7 @@ error of the network’s output compared to the desired output $\mathbf{y}$ is
 quantified by a loss function $\mathcal{L}(\mathbf{y}, \hat{\mathbf{y}})$; this
 error is subsequently allowed to flow backward through the network in the
 <em>backward propagation</em> step to compute the gradients of all network parameters
-with respect to the loss function.<sup id="fnref:1"><a href="#fn:1" class="footnote">1</a></sup> Precisely, the backward propagation
+with respect to the loss function.<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup> Precisely, the backward propagation
 (backpropagation) step is a method of computing gradients of network
 parameters with respect to a specified loss function; gradient
 descent is an example of a method that uses these computed gradients as part of
@@ -167,36 +167,35 @@ that $j \in Pa(u^{(i)})$. The forward propagation algorithm proceeds as follows:
 <p>The classical chain rule of calculus for one-dimensional variables $x, y, z$ such that
 $y = g(x)$ and $z = f(y) = f(g(x))$ states that</p>
 
-<script type="math/tex; mode=display">\frac{dz}{dx} = \frac{dz}{dy} \frac{dy}{dx}</script>
+\[\frac{dz}{dx} = \frac{dz}{dy} \frac{dy}{dx}\]
 
 <p>In order to work with variables of higher dimension in neural networks, we’ll
 need to generalize this beyond the scalar case. Let $\mathbf{x} \in
 \mathbf{R}^m, \mathbf{y} \in \mathbf{R}^n, z \in \mathbf{R}$, and let
 $\mathbf{y} = g(\mathbf{x})$ and $z = f(\mathbf{y}) = f(g(\mathbf{x}))$ for
-appropriately defined $f, g$. The multivariate chain rule<sup id="fnref:2"><a href="#fn:2" class="footnote">2</a></sup> states that</p>
+appropriately defined $f, g$. The multivariate chain rule<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> states that</p>
 
-<script type="math/tex; mode=display">\nabla_\mathbf{x} z = \left( \nabla_\mathbf{y} z \right)^T \left( \frac{\partial \mathbf{y}}{\partial \mathbf{x}} \right) \label{multivar}\tag{1}</script>
+\[\nabla_\mathbf{x} z = \left( \nabla_\mathbf{y} z \right)^T \left( \frac{\partial \mathbf{y}}{\partial \mathbf{x}} \right) \label{multivar}\tag{1}\]
 
 <p>where</p>
 
-<script type="math/tex; mode=display">\nabla_\mathbf{y} z = \left[ \frac{\partial z}{\partial y_1}, \dots, \frac{\partial z}{\partial y_n} \right]^T</script>
+\[\nabla_\mathbf{y} z = \left[ \frac{\partial z}{\partial y_1}, \dots, \frac{\partial z}{\partial y_n} \right]^T\]
 
 <p>is the gradient of $z$ with respect to $\mathbf{y}$ and</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\frac{\partial \mathbf{y}}{\partial \mathbf{x}} = 
+\[\frac{\partial \mathbf{y}}{\partial \mathbf{x}} = 
 \begin{bmatrix}
-\frac{\partial y_1}{\partial x_1} & \frac{\partial y_1}{\partial x_2} & \cdots & \frac{\partial y_1}{\partial x_m} \\
-\frac{\partial y_2}{\partial x_1} & \frac{\partial y_2}{\partial x_2} & \cdots & \frac{\partial y_2}{\partial x_m} \\
-\vdots & \vdots & \ddots & \vdots \\
-\frac{\partial y_n}{\partial x_1} & \frac{\partial y_n}{\partial x_2} & \cdots & \frac{\partial y_n}{\partial x_m} \\
-\end{bmatrix} %]]></script>
+\frac{\partial y_1}{\partial x_1} &amp; \frac{\partial y_1}{\partial x_2} &amp; \cdots &amp; \frac{\partial y_1}{\partial x_m} \\
+\frac{\partial y_2}{\partial x_1} &amp; \frac{\partial y_2}{\partial x_2} &amp; \cdots &amp; \frac{\partial y_2}{\partial x_m} \\
+\vdots &amp; \vdots &amp; \ddots &amp; \vdots \\
+\frac{\partial y_n}{\partial x_1} &amp; \frac{\partial y_n}{\partial x_2} &amp; \cdots &amp; \frac{\partial y_n}{\partial x_m} \\
+\end{bmatrix}\]
 
 <p>is the Jacobian matrix of $g$ with dimensions $n \times m$. Expanding this
 matrix multiplication for the derivative of $z$ with respect to a particular
 $x_i$ yields</p>
 
-<script type="math/tex; mode=display">\frac{\partial z}{\partial x_i} = \sum_j \frac{\partial z}{\partial y_j} \frac{\partial y_j}{\partial x_i} \label{scalar}\tag{2}</script>
+\[\frac{\partial z}{\partial x_i} = \sum_j \frac{\partial z}{\partial y_j} \frac{\partial y_j}{\partial x_i} \label{scalar}\tag{2}\]
 
 <p>with the intuitive interpretation that the rate of change of $z$ with respect to
 $x_i$ depends on all contributions $y_j$ that $x_i$ influences.</p>
@@ -213,7 +212,7 @@ represents $\frac{\partial z}{\partial X_i}$ where $X_i$ is a single scalar valu
 The chain rule for tensors, where $\mathbf{Y} = g(\mathbf{X})$ and $z = f(\mathbf{Y})$,
 is therefore</p>
 
-<script type="math/tex; mode=display">\nabla_{\mathbf{X}}z = \left( \nabla_{\mathbf{Y}} z \right)^T \left( \frac{\partial \mathbf{Y}}{\partial \mathbf{X}} \right)  = \sum_j \frac{\partial z}{\partial Y_j} \left( \nabla_{\mathbf{X}} Y_j \right) \label{tensor}\tag{3}</script>
+\[\nabla_{\mathbf{X}}z = \left( \nabla_{\mathbf{Y}} z \right)^T \left( \frac{\partial \mathbf{Y}}{\partial \mathbf{X}} \right)  = \sum_j \frac{\partial z}{\partial Y_j} \left( \nabla_{\mathbf{X}} Y_j \right) \label{tensor}\tag{3}\]
 
 <p>which is a simple matrix-vector product between the Jacobian $\partial \mathbf{Y} / \partial \mathbf{X}$ and the gradient $\nabla_{\mathbf{Y}} z$.</p>
 
@@ -241,7 +240,7 @@ particular, consider a computational graph with $n$ input nodes labeled $u^{(1)}
 $\frac{\partial u^{(m)}}{\partial u^{(j)}}$ for arbitrary node $u^{(j)}$,
 the multivariate chain rule (Equation $\ref{scalar}$) yields</p>
 
-<script type="math/tex; mode=display">\frac{\partial u^{(m)}}{\partial u^{(j)}} = \sum_{i \mid j \in Pa(u^{(i)})} \frac{\partial u^{(m)}}{\partial u^{(i)}} \frac{\partial u^{(i)}}{\partial u^{(j)}}</script>
+\[\frac{\partial u^{(m)}}{\partial u^{(j)}} = \sum_{i \mid j \in Pa(u^{(i)})} \frac{\partial u^{(m)}}{\partial u^{(i)}} \frac{\partial u^{(i)}}{\partial u^{(j)}}\]
 
 <p>We need to perform this computation for every node in our computational graph,
 but how do we do so efficiently? A naive approach would be to simply compute
@@ -252,15 +251,15 @@ making this process inefficient. More precisely, the naive approach would be
 exponential in the number of nodes, which can be seen by writing the multivariate
 chain rule explicitly (non-recursively):</p>
 
-<script type="math/tex; mode=display">\frac{\partial u^{(m)}}{\partial u^{(j)}} = \sum_{\text{path } (u^{(\pi_1)},
+\[\frac{\partial u^{(m)}}{\partial u^{(j)}} = \sum_{\text{path } (u^{(\pi_1)},
 u^{(\pi_2)}, \dots, u^{(\pi_t)}), \\ \text{ from } \pi_1 = j \text{ to } \pi_t =
-m} \prod_{k = 2}^t \frac{\partial u^{(\pi_k)}}{\partial u^{(\pi_k - 1)}}</script>
+m} \prod_{k = 2}^t \frac{\partial u^{(\pi_k)}}{\partial u^{(\pi_k - 1)}}\]
 
 <p>Instead, backpropagation exploits the <a href="https://en.wikipedia.org/wiki/Dynamic_programming">dynamic
 programming</a> paradigm to
 compute gradients in an efficient manner that eliminates the burden of
 re-computing common, expensive gradients at each application of the chain
-rule.<sup id="fnref:3"><a href="#fn:3" class="footnote">3</a></sup> Instead of starting computation at the bottom of the graph,
+rule.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup> Instead of starting computation at the bottom of the graph,
 backpropagation begins at the output nodes, computing and storing gradients
 while traversing through the computational graph in a reverse direction (hence 
 the name <em>back</em>propagation).</p>
@@ -274,7 +273,7 @@ each edge in $G’$ computes the blue portion of our earlier expression of the
 multivariate chain rule, and the sum of all incoming edges to each node in $G’$
 computes the red portion, yielding our desired result.</p>
 
-<script type="math/tex; mode=display">\frac{\partial u^{(m)}}{\partial u^{(j)}} = \color{red}{\sum_{i \mid j \in Pa(u^{(i)})}} \color{blue}{\frac{\partial u^{(m)}}{\partial u^{(i)}} \frac{\partial u^{(i)}}{\partial u^{(j)}}}</script>
+\[\frac{\partial u^{(m)}}{\partial u^{(j)}} = \color{red}{\sum_{i \mid j \in Pa(u^{(i)})}} \color{blue}{\frac{\partial u^{(m)}}{\partial u^{(i)}} \frac{\partial u^{(i)}}{\partial u^{(j)}}}\]
 
 <p>This order of operations allows backpropagation to scale linearly with the
 number of edges in $G$, avoiding repeated computations. Specifically, to compute
@@ -298,32 +297,32 @@ the most general case.</p>
 allow variables to be tensors (which, in general, can have an arbitrary number
 of dimensions). Each variable $V$ is also associated with the operations</p>
 <ul>
-  <li><code class="highlighter-rouge">get_operation(V)</code>, which returns the operation that computes $V$ as
+  <li><code class="language-plaintext highlighter-rouge">get_operation(V)</code>, which returns the operation that computes $V$ as
 represented by the edges incident on $V$ in $G$.</li>
-  <li><code class="highlighter-rouge">get_children(V, G)</code>, which returns the list of children of $V$ in $G$.</li>
-  <li><code class="highlighter-rouge">get_parents(V, G)</code>, which returns the list of parents of $V$ in $G$.</li>
+  <li><code class="language-plaintext highlighter-rouge">get_children(V, G)</code>, which returns the list of children of $V$ in $G$.</li>
+  <li><code class="language-plaintext highlighter-rouge">get_parents(V, G)</code>, which returns the list of parents of $V$ in $G$.</li>
 </ul>
 
-<p>Each operation <code class="highlighter-rouge">op(inputs)</code> returned by <code class="highlighter-rouge">get_operation(V)</code> is associated with a
-backpropagation operation <code class="highlighter-rouge">op.bprop(inputs, var, grad)</code> for each of <code class="highlighter-rouge">op</code>’s input
+<p>Each operation <code class="language-plaintext highlighter-rouge">op(inputs)</code> returned by <code class="language-plaintext highlighter-rouge">get_operation(V)</code> is associated with a
+backpropagation operation <code class="language-plaintext highlighter-rouge">op.bprop(inputs, var, grad)</code> for each of <code class="language-plaintext highlighter-rouge">op</code>’s input
 arguments, which computes the Jacobian-gradient product specified in Equation
-\ref{tensor}. In particular, <code class="highlighter-rouge">op.bprop(inputs, X, G)</code> returns</p>
+\ref{tensor}. In particular, <code class="language-plaintext highlighter-rouge">op.bprop(inputs, X, G)</code> returns</p>
 
-<script type="math/tex; mode=display">\mathbf{G}^T \nabla_\mathbf{X} \texttt{op(inputs)} =  \sum_j G_j (\nabla_\mathbf{X} \texttt{op(inputs)}_j )</script>
+\[\mathbf{G}^T \nabla_\mathbf{X} \texttt{op(inputs)} =  \sum_j G_j (\nabla_\mathbf{X} \texttt{op(inputs)}_j )\]
 
 <p>where $\mathbf{G}$ is the gradient of the final computational graph output
-with respect to the output of <code class="highlighter-rouge">op</code> and $\mathbf{X}$ is the input variable to <code class="highlighter-rouge">op</code>
+with respect to the output of <code class="language-plaintext highlighter-rouge">op</code> and $\mathbf{X}$ is the input variable to <code class="language-plaintext highlighter-rouge">op</code>
 which we are computing gradients with respect to.</p>
 
-<p>As a quick example to solidify intuition, let <code class="highlighter-rouge">op(inputs = [A, B]) =</code> $AB$ be the
+<p>As a quick example to solidify intuition, let <code class="language-plaintext highlighter-rouge">op(inputs = [A, B]) =</code> $AB$ be the
 matrix product of two tensors $A$ and $B$. This operation also defines</p>
 <ul>
-  <li><code class="highlighter-rouge">op.bprop(inputs, A, G) = </code> $A^TG$</li>
-  <li><code class="highlighter-rouge">op.bprop(inputs, B, G) = </code> $GB^T$</li>
+  <li><code class="language-plaintext highlighter-rouge">op.bprop(inputs, A, G) = </code> $A^TG$</li>
+  <li><code class="language-plaintext highlighter-rouge">op.bprop(inputs, B, G) = </code> $GB^T$</li>
 </ul>
 
 <p>which specify the gradients of the operation with respect to each of the inputs.
-Note that <code class="highlighter-rouge">op</code> must treat each of its inputs as distinct, even if $A = B$; this
+Note that <code class="language-plaintext highlighter-rouge">op</code> must treat each of its inputs as distinct, even if $A = B$; this
 is because these individual gradients will eventually be added to obtain the
 correct total.</p>
 
@@ -438,16 +437,16 @@ scale.</p>
 
 <h2 id="notes">Notes</h2>
 
-<div class="footnotes">
+<div class="footnotes" role="doc-endnotes">
   <ol>
-    <li id="fn:1">
-      <p>The mechanism described here is known as <em>supervised learning</em>, in which labeled outputs are presented to networks to aid in the learning mechanism. When such desired outputs $\mathbf{y}$ are not provided, the network can still be trained using <em>unsupervised learning</em> techniques via the use of local or incremental learning rules such as those used in <a href="https://en.wikipedia.org/wiki/Hopfield_network">Hopfield networks</a> or supervised mechanisms trained to replicate the input as in <a href="https://en.wikipedia.org/wiki/Autoencoder">autoencoders</a>. Backpropagation is only applicable in supervised learning (with known $\mathbf{y}$), and this setting is assumed for the remainder of the post. <a href="#fnref:1" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:1" role="doc-endnote">
+      <p>The mechanism described here is known as <em>supervised learning</em>, in which labeled outputs are presented to networks to aid in the learning mechanism. When such desired outputs $\mathbf{y}$ are not provided, the network can still be trained using <em>unsupervised learning</em> techniques via the use of local or incremental learning rules such as those used in <a href="https://en.wikipedia.org/wiki/Hopfield_network">Hopfield networks</a> or supervised mechanisms trained to replicate the input as in <a href="https://en.wikipedia.org/wiki/Autoencoder">autoencoders</a>. Backpropagation is only applicable in supervised learning (with known $\mathbf{y}$), and this setting is assumed for the remainder of the post. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:2">
-      <p>For resources providing a deeper intuition on why this is the case, see <a href="https://math.stackexchange.com/questions/1326429/intuition-of-multivariable-chain-rule">here</a> and <a href="https://math.stackexchange.com/questions/423/intuitive-reasoning-behind-the-chain-rule-in-multiple-variables">here</a>. <a href="#fnref:2" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:2" role="doc-endnote">
+      <p>For resources providing a deeper intuition on why this is the case, see <a href="https://math.stackexchange.com/questions/1326429/intuition-of-multivariable-chain-rule">here</a> and <a href="https://math.stackexchange.com/questions/423/intuitive-reasoning-behind-the-chain-rule-in-multiple-variables">here</a>. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:3">
-      <p>More precisely, backpropagation is designed to reduce the computation of common subexpressions without regard for memory. <a href="#fnref:3" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:3" role="doc-endnote">
+      <p>More precisely, backpropagation is designed to reduce the computation of common subexpressions without regard for memory. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
 </div>

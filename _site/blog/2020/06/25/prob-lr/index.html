@@ -83,7 +83,7 @@ $Y_i, X_i$ that have a common density $f_{X_i, Y_i}$. The variables $Z_i =
   </li>
   <li>
     <p>The target variables and input variables are related via the equation
-<script type="math/tex">y_i = \theta^T x_i + \epsilon_i</script>
+\(y_i = \theta^T x_i + \epsilon_i\)
 where the error terms $\epsilon_i$ capture random noise or unmodeled effects.</p>
   </li>
   <li>
@@ -108,17 +108,16 @@ X_i}$, and applying the change-of-variables formula.</p>
 <p>By assumption 3, $\epsilon_i \perp x_i$. We can therefore write the joint
 distribution of each input-error pair as</p>
 
-<script type="math/tex; mode=display">f_{\epsilon_i, X_i}(\epsilon, x) = f_{\epsilon_i}(\epsilon) f_{X_i}(x)</script>
+\[f_{\epsilon_i, X_i}(\epsilon, x) = f_{\epsilon_i}(\epsilon) f_{X_i}(x)\]
 
 <p>Furthermore, by assumption 2, there exists a linear relationship between $y_i$ and
 $x_i$. This relationship allows us to define a transformation $\phi :
 (\epsilon_i, X_i) \to (Y_i, X_i)$ such that</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\phi(\epsilon_i, x_i) &= (\theta^Tx_i + \epsilon_i, x_i) \\
-\phi^{-1}(y_i, x_i) &= (y_i - \theta^T x_i, x_i)
-\end{align} %]]></script>
+\[\begin{align}
+\phi(\epsilon_i, x_i) &amp;= (\theta^Tx_i + \epsilon_i, x_i) \\
+\phi^{-1}(y_i, x_i) &amp;= (y_i - \theta^T x_i, x_i)
+\end{align}\]
 
 <p>We are now ready to apply the change-of-variables formula from $f_{\epsilon_i,
 X_i}$ to $f_{Y_i, X_i}$. Specifically, for an invertible mapping $\phi :
@@ -126,17 +125,16 @@ X_i}$ to $f_{Y_i, X_i}$. Specifically, for an invertible mapping $\phi :
 \dots B_n$ such that $\mathbf{B} = \phi(\mathbf{A})$ and $\mathbf{A} =
 \phi^{-1}(\mathbf{B})$, we have that</p>
 
-<script type="math/tex; mode=display">p_{B_1 \dots B_n}(B_1 \dots B_n) = p_{A_1 \dots A_n} (\phi^{-1} (B_1 \dots B_n)) \left| \text{det} \left( \frac{\partial \phi^{-1} (A_1 \dots A_n)}{\partial A_1 \dots A_n} \right) \right|</script>
+\[p_{B_1 \dots B_n}(B_1 \dots B_n) = p_{A_1 \dots A_n} (\phi^{-1} (B_1 \dots B_n)) \left| \text{det} \left( \frac{\partial \phi^{-1} (A_1 \dots A_n)}{\partial A_1 \dots A_n} \right) \right|\]
 
 <p>In our case, $B_1 = Y_i$, $B_2 = X_i$, $A_1 = \epsilon_i$, $A_2 = X_i$. We first
 compute</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\partial \phi^{-1} = \begin{bmatrix} 1 & - \theta^T \\ 0 & 1  \end{bmatrix} %]]></script>
+\[\partial \phi^{-1} = \begin{bmatrix} 1 &amp; - \theta^T \\ 0 &amp; 1  \end{bmatrix}\]
 
 <p>which has determinant 1. We therefore have</p>
 
-<script type="math/tex; mode=display">f_{Y_i, X_i}(y_i, x_i) = f_{\epsilon_i, X_i} (y_i - \theta^T x_i, x_i) = f_{\epsilon_i} (y_i - \theta^T x_i) f_{X_i}(x_i)</script>
+\[f_{Y_i, X_i}(y_i, x_i) = f_{\epsilon_i, X_i} (y_i - \theta^T x_i, x_i) = f_{\epsilon_i} (y_i - \theta^T x_i) f_{X_i}(x_i)\]
 
 <p>again due to $\epsilon_i \perp x_i$.</p>
 
@@ -147,22 +145,22 @@ density of the input variables $f_{X_i}$ and focus our efforts solely on
 maximizing the conditional likelihood $f_{Y_i \mid X_i}$ across our dataset. We
 can write the conditional as</p>
 
-<script type="math/tex; mode=display">f_{Y_i \mid X_i}(y_i \mid x_i) = \frac{f_{Y_i, X_i} (y_i, x_i)}{f_{X_i}(x_i)} = f_{\epsilon_i} (y_i - \theta^T x_i)</script>
+\[f_{Y_i \mid X_i}(y_i \mid x_i) = \frac{f_{Y_i, X_i} (y_i, x_i)}{f_{X_i}(x_i)} = f_{\epsilon_i} (y_i - \theta^T x_i)\]
 
 <p>By assumption 1, each $(X_i, Y_i)$ is independent, and so we have</p>
 
-<script type="math/tex; mode=display">f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} f_{\epsilon_i}(y_i - \theta^T x_i)</script>
+\[f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} f_{\epsilon_i}(y_i - \theta^T x_i)\]
 
 <p>Explicitly, this is</p>
 
-<script type="math/tex; mode=display">f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} \frac{1}{\sqrt{2 \pi \sigma^2}} \exp \left( - \frac{(y_i - \theta^T x_i)^2}{2 \sigma^2} \right)</script>
+\[f_{X \mid Y} = \prod_{(x_i, y_i) \in \mathcal{D}} \frac{1}{\sqrt{2 \pi \sigma^2}} \exp \left( - \frac{(y_i - \theta^T x_i)^2}{2 \sigma^2} \right)\]
 
 <p>Maximizing $f_{X \mid Y}$ with respect to $\theta$ is now a simple exercise in
 calculus; one typically maximizes $\log f_{X \mid Y}$ as a proxy to transform
 the product into a sum. After some calculus as in <a class="citation" href="#ng2000cs229">(Ng, 2000)</a>, we
 conclude that maximizing the log-likelihood is equivalent to minimizing</p>
 
-<script type="math/tex; mode=display">\sum_{(x_i, y_i) \in \mathcal{D}} (y_i - \theta^T x_i)^2</script>
+\[\sum_{(x_i, y_i) \in \mathcal{D}} (y_i - \theta^T x_i)^2\]
 
 <p>which is the canonical least-squares cost function for linear regression, as
 desired.</p>

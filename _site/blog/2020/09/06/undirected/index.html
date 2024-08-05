@@ -77,7 +77,7 @@ solution</a> in fully
 observed Bayesian networks and requires more nuanced techniques including
 <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">expectation–maximization and variational
 learning</a> for partially
-observed networks involving latent variables.<sup id="fnref:1"><a href="#fn:1" class="footnote">1</a></sup> Both of these techniques
+observed networks involving latent variables.<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup> Both of these techniques
 leverage that $p(x)$ is defined in terms of the conditional probability
 distributions specified in the directed graphical model.</p>
 
@@ -107,11 +107,11 @@ variables in the graph, where $x$ collects the observed variables and $z$
 collects hidden variables. In order to obtain a valid probability distribution,
 we must normalize $\tilde{p}$, so that</p>
 
-<script type="math/tex; mode=display">p(x, z; \theta) = \frac{1}{Z(\theta)} \tilde{p}(x, z; \theta)</script>
+\[p(x, z; \theta) = \frac{1}{Z(\theta)} \tilde{p}(x, z; \theta)\]
 
 <p>where</p>
 
-<script type="math/tex; mode=display">Z(\theta) = \sum_{x, z} \tilde{p}(x, z; \theta)</script>
+\[Z(\theta) = \sum_{x, z} \tilde{p}(x, z; \theta)\]
 
 <p>for discrete $x$ and $z$; the continuous analog simply requires replacing the
 sum with an integral. It’s immediately obvious that this operation is
@@ -128,12 +128,11 @@ tells us that we should maximize the probability of the observed data given
 our model; a canonical way to do so is by gradient descent. In particular,
 we have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align*}
-\nabla_\theta \log p(x; \theta) &= \nabla_\theta \log \sum_z p(x, z; \theta) \\
-                                &= \nabla_\theta \log \sum_z \left( \frac{ \tilde{p}(x, z; \theta)}{Z(\theta)} \right) \\
-                                &= \underbrace{\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta)}_{\text{Positive phase}} \underbrace{- \nabla_\theta \log Z(\theta)}_{\text{Negative phase}}
-\end{align*} %]]></script>
+\[\begin{align*}
+\nabla_\theta \log p(x; \theta) &amp;= \nabla_\theta \log \sum_z p(x, z; \theta) \\
+                                &amp;= \nabla_\theta \log \sum_z \left( \frac{ \tilde{p}(x, z; \theta)}{Z(\theta)} \right) \\
+                                &amp;= \underbrace{\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta)}_{\text{Positive phase}} \underbrace{- \nabla_\theta \log Z(\theta)}_{\text{Negative phase}}
+\end{align*}\]
 
 <p>This decomposition into a <em>positive</em> and <em>negative</em> phase of learning is well-known; we’ll
 have more to say about the interpretation of each phase as we continue our derivation. 
@@ -146,24 +145,22 @@ lower bound by following the techniques used for latent variable models
 described <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">here</a>. Specifically,
 we begin by rewriting the postive phase as an expectation:</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align*}
-\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &= \nabla_\theta \sum_z q(z \mid x) \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
+\[\begin{align*}
+\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &amp;= \nabla_\theta \sum_z q(z \mid x) \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
 x)} \\
-&= \nabla_\theta \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
+&amp;= \nabla_\theta \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
 x)} \right]
-\end{align*} %]]></script>
+\end{align*}\]
 
 <p>To move the logarithm inside the expectation, we apply Jensen’s inequality,
 noting that equality is preserved if $q(z \mid x) = p(z \mid x; \theta)$ (where
-we fix $\theta$ for the $q$ distribution).<sup id="fnref:2"><a href="#fn:2" class="footnote">2</a></sup> Fixing $q(z \mid x) = p(z \mid x;
+we fix $\theta$ for the $q$ distribution).<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> Fixing $q(z \mid x) = p(z \mid x;
 \theta)$, we have that</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log \tilde{p}(x,z ; \theta) - \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log  {q(z \mid x)} \\
-&= \nabla_\theta \mathbf{E}_{z \sim p(z \mid x)} \log \tilde{p}(x, z; \theta)
-\end{align} %]]></script>
+\[\begin{align}
+\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &amp;= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log \tilde{p}(x,z ; \theta) - \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log  {q(z \mid x)} \\
+&amp;= \nabla_\theta \mathbf{E}_{z \sim p(z \mid x)} \log \tilde{p}(x, z; \theta)
+\end{align}\]
 
 <p>Which has the intuitive interpretation of maximizing the energy function of the
 undirected model with respect to likely “completions” $z \sim p(z \mid x)$ of
@@ -180,24 +177,22 @@ the gradient of the partition function with respect to parameters $\theta$.
 Looking more closely at this gradient (and omitting the $\theta$ argument of
 $Z(\theta)$ for clarity), we have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align*}
-\nabla_\theta \log Z &= \frac{\nabla_\theta Z}{Z} \\
-&= \frac{\nabla_\theta \sum_{x, z} \tilde{p}(x, z)}{Z} \\
-&= \frac{\sum_{x, z} \nabla_\theta \tilde{p}(x, z)}{Z}
-\end{align*} %]]></script>
+\[\begin{align*}
+\nabla_\theta \log Z &amp;= \frac{\nabla_\theta Z}{Z} \\
+&amp;= \frac{\nabla_\theta \sum_{x, z} \tilde{p}(x, z)}{Z} \\
+&amp;= \frac{\sum_{x, z} \nabla_\theta \tilde{p}(x, z)}{Z}
+\end{align*}\]
 
 <p>With the mild assumption that ${p}(x, z) &gt; 0$ for all $x, z$, we can substitute
 $\tilde{p}(x, z) = \exp(\log \tilde{p}(x, z))$ to obtain</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\nabla_\theta \log Z &= \frac{\sum_{x, z} \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
-                    &= \frac{\sum_{x, z} \exp(\log \tilde{p}(x, z)) \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
-                    &= \sum_{x, z} \left( \frac{\tilde{p}(x, z)}{Z} \nabla_\theta \exp(\log \tilde{p}(x, z)) \right) \\
-                    &= \sum_{x, z} p(x, z) \nabla_\theta \exp(\log \tilde{p}(x, z)) \\
-                    &= \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z)
-\end{align} %]]></script>
+\[\begin{align}
+\nabla_\theta \log Z &amp;= \frac{\sum_{x, z} \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
+                    &amp;= \frac{\sum_{x, z} \exp(\log \tilde{p}(x, z)) \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
+                    &amp;= \sum_{x, z} \left( \frac{\tilde{p}(x, z)}{Z} \nabla_\theta \exp(\log \tilde{p}(x, z)) \right) \\
+                    &amp;= \sum_{x, z} p(x, z) \nabla_\theta \exp(\log \tilde{p}(x, z)) \\
+                    &amp;= \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z)
+\end{align}\]
 
 <p>which allows us to express the negative learning phase as an expectation over
 $x$ and $z$ drawn from the model distribution.</p>
@@ -207,11 +202,10 @@ $x$ and $z$ drawn from the model distribution.</p>
 <p>Our work in the prior sections allowed us to re-express the positive and negative
 learning phases as expectations:</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align}
-\nabla_\theta \log p(x; \theta) &= \nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) - \nabla_\theta \log Z(\theta) \\
-&= \mathbf{E}_{z \sim p(z \mid x)} \nabla_\theta \log \tilde{p}(x, z; \theta) - \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z; \theta)
-\end{align} %]]></script>
+\[\begin{align}
+\nabla_\theta \log p(x; \theta) &amp;= \nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) - \nabla_\theta \log Z(\theta) \\
+&amp;= \mathbf{E}_{z \sim p(z \mid x)} \nabla_\theta \log \tilde{p}(x, z; \theta) - \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z; \theta)
+\end{align}\]
 
 <p>which enables the use of Monte Carlo methods for maximizing the resulting
 likelihood while avoiding intractability problems in both phases. This
@@ -234,7 +228,7 @@ algorithms for undirected models.</p>
 immediate and intuitive approach to approximating the loss is via Monte Carlo
 approximations of each expectation. In particular, we can compute the positive
 phase expectation by sampling $x$ from the training set, $z$ according to $p(z
-\mid x)$, and computing the gradient with those $x$ and $z$.<sup id="fnref:3"><a href="#fn:3" class="footnote">3</a></sup> Since the negative
+\mid x)$, and computing the gradient with those $x$ and $z$.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup> Since the negative
 phase requires sampling from the model distribution, we can perform such
 sampling by initializing $m$ samples of $(x, z)$ to random values and applying a
 Markov Chain Monte Carlo method (such as Gibbs sampling or Metropolis-Hastings
@@ -381,22 +375,21 @@ steps tractable.</p>
 <p>The restricted boltzmann machine is defined over a set of visible variables $x$
 and hidden variables $z$ so that</p>
 
-<script type="math/tex; mode=display">p(x, z; \theta) = \frac{\exp(-\mathcal{E}(x, z; \theta))}{Z(\theta)}</script>
+\[p(x, z; \theta) = \frac{\exp(-\mathcal{E}(x, z; \theta))}{Z(\theta)}\]
 
 <p>for energy function $\mathcal{E}$ defined over $D$-dimensional binary $x$ and $K$-dimensional binary $z$ as</p>
 
-<script type="math/tex; mode=display">\mathcal{E}(x, z; \theta) = -\sum_{i = 1}^D \sum_{j = 1}^K v_i W_{ij} h_j - \sum_{i = 1}^D x_ic_i - \sum_{j = 1}^K z_jb_j</script>
+\[\mathcal{E}(x, z; \theta) = -\sum_{i = 1}^D \sum_{j = 1}^K v_i W_{ij} h_j - \sum_{i = 1}^D x_ic_i - \sum_{j = 1}^K z_jb_j\]
 
 <p>where $\theta = (W, b, c)$. The graphical representation of RBMs with
 connections solely between hidden and observed units (and no connections between
 units of the same type) admits the property that all observed units become
 independent when conditioned on hidden units (and vice versa). As derived in <a class="citation" href="#ping2016learning">(Ping, 2016)</a>, we have</p>
 
-<script type="math/tex; mode=display">% <![CDATA[
-\begin{align*}
-p(x_i = 1 \mid z, \theta) &= \sigma \left( \sum_{j = 1}^K W_{ij} z_j \right) \\
-p(z_i = 1 \mid x, \theta) &= \sigma \left( \sum_{j = 1}^H W_{ij} x_j \right)
-\end{align*} %]]></script>
+\[\begin{align*}
+p(x_i = 1 \mid z, \theta) &amp;= \sigma \left( \sum_{j = 1}^K W_{ij} z_j \right) \\
+p(z_i = 1 \mid x, \theta) &amp;= \sigma \left( \sum_{j = 1}^H W_{ij} x_j \right)
+\end{align*}\]
 
 <p>The simple forms of these expressions allow for a simple and efficient Gibbs
 sampler. In particular, the RBM can be trained directly with Algorithm 2 (CD);
@@ -435,16 +428,16 @@ further examination.</p>
 
 <h2 id="notes">Notes</h2>
 
-<div class="footnotes">
+<div class="footnotes" role="doc-endnotes">
   <ol>
-    <li id="fn:1">
-      <p>This is because the introduction of latent variables introduces a sum $p(x) = \sum_z p(x, z)$, which poses challenges when computing the log-likelihood of the data. <a href="#fnref:1" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:1" role="doc-endnote">
+      <p>This is because the introduction of latent variables introduces a sum $p(x) = \sum_z p(x, z)$, which poses challenges when computing the log-likelihood of the data. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:2">
-      <p>If $p(z \mid x)$ is intractable, we can still derive a lower bound for the expectation; see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post on latent variable model learning</a> for further information. <a href="#fnref:2" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:2" role="doc-endnote">
+      <p>If $p(z \mid x)$ is intractable, we can still derive a lower bound for the expectation; see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post on latent variable model learning</a> for further information. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:3">
-      <p>In this post, we assume that computing the conditional $p(z \mid x)$ is tractable, therefore allowing for a Monte Carlo evaluation of the expectation in the positive phase. If this were not the case, variational methods could be used to approximately evaluate the conditional, but we won’t worry ourselves with those complexities here (see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post</a> if you’re curious). <a href="#fnref:3" class="reversefootnote">&#8617;</a></p>
+    <li id="fn:3" role="doc-endnote">
+      <p>In this post, we assume that computing the conditional $p(z \mid x)$ is tractable, therefore allowing for a Monte Carlo evaluation of the expectation in the positive phase. If this were not the case, variational methods could be used to approximately evaluate the conditional, but we won’t worry ourselves with those complexities here (see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post</a> if you’re curious). <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
 </div>
