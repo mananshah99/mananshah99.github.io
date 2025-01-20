@@ -4,7 +4,7 @@
     <meta charset='UTF-8'>
     <meta content='width=device-width, initial-scale=1' name='viewport'/>
 
-    <meta name='description' content='Manan Shah is a senior at Stanford University.'>
+    <meta name='description' content='Manan Shah'>
     <meta name='keywords' content='machine-learning'>
     <meta name='author' content='Manan Shah'>
 
@@ -14,6 +14,7 @@
     <link href='/css/markdown.css' rel='stylesheet'/>
 
     <script type='text/x-mathjax-config'>
+            
 MathJax.Hub.Config({
   jax: ['input/TeX', 'output/HTML-CSS'],
   tex2jax: {
@@ -26,12 +27,25 @@ MathJax.Hub.Config({
   messageStyle: 'none',
   'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
 });
+
 </script>
 
-<script src='//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML' type='text/javascript'></script>
+<!-- this is necessary to get the mathjax config working! -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  }
+};
+</script>
+
+<script type='text/javascript' src='https://cdn.jsdelivr.net/npm/mathjax@3.0.0/es5/tex-mml-chtml.js'></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
 
-    <script src="/assets/katex.min.js"></script>
+
+
+    <!--- <script src="/assets/katex.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" integrity="sha512-LQNxIMR5rXv7o+b1l8+N1EZMfhG7iFZ9HhnbJkTp4zjNr5Wvst75AqUeFDxeRUa7l5vEDyUiAip//r+EFLLCyA==" crossorigin="anonymous"></script>
     <script src="/assets/pseudocode.min.js" type="text/javascript"></script>
     <link rel="stylesheet" href="/assets/pseudocode.min.css" type="text/css">
 
@@ -68,7 +82,7 @@ error of the network’s output compared to the desired output $\mathbf{y}$ is
 quantified by a loss function $\mathcal{L}(\mathbf{y}, \hat{\mathbf{y}})$; this
 error is subsequently allowed to flow backward through the network in the
 <em>backward propagation</em> step to compute the gradients of all network parameters
-with respect to the loss function.<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup> Precisely, the backward propagation
+with respect to the loss function.<sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">1</a></sup> Precisely, the backward propagation
 (backpropagation) step is a method of computing gradients of network
 parameters with respect to a specified loss function; gradient
 descent is an example of a method that uses these computed gradients as part of
@@ -173,7 +187,7 @@ $y = g(x)$ and $z = f(y) = f(g(x))$ states that</p>
 need to generalize this beyond the scalar case. Let $\mathbf{x} \in
 \mathbf{R}^m, \mathbf{y} \in \mathbf{R}^n, z \in \mathbf{R}$, and let
 $\mathbf{y} = g(\mathbf{x})$ and $z = f(\mathbf{y}) = f(g(\mathbf{x}))$ for
-appropriately defined $f, g$. The multivariate chain rule<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> states that</p>
+appropriately defined $f, g$. The multivariate chain rule<sup id="fnref:2"><a href="#fn:2" class="footnote" rel="footnote" role="doc-noteref">2</a></sup> states that</p>
 
 \[\nabla_\mathbf{x} z = \left( \nabla_\mathbf{y} z \right)^T \left( \frac{\partial \mathbf{y}}{\partial \mathbf{x}} \right) \label{multivar}\tag{1}\]
 
@@ -259,7 +273,7 @@ m} \prod_{k = 2}^t \frac{\partial u^{(\pi_k)}}{\partial u^{(\pi_k - 1)}}\]
 programming</a> paradigm to
 compute gradients in an efficient manner that eliminates the burden of
 re-computing common, expensive gradients at each application of the chain
-rule.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup> Instead of starting computation at the bottom of the graph,
+rule.<sup id="fnref:3"><a href="#fn:3" class="footnote" rel="footnote" role="doc-noteref">3</a></sup> Instead of starting computation at the bottom of the graph,
 backpropagation begins at the output nodes, computing and storing gradients
 while traversing through the computational graph in a reverse direction (hence 
 the name <em>back</em>propagation).</p>
@@ -439,13 +453,13 @@ scale.</p>
 
 <div class="footnotes" role="doc-endnotes">
   <ol>
-    <li id="fn:1" role="doc-endnote">
+    <li id="fn:1">
       <p>The mechanism described here is known as <em>supervised learning</em>, in which labeled outputs are presented to networks to aid in the learning mechanism. When such desired outputs $\mathbf{y}$ are not provided, the network can still be trained using <em>unsupervised learning</em> techniques via the use of local or incremental learning rules such as those used in <a href="https://en.wikipedia.org/wiki/Hopfield_network">Hopfield networks</a> or supervised mechanisms trained to replicate the input as in <a href="https://en.wikipedia.org/wiki/Autoencoder">autoencoders</a>. Backpropagation is only applicable in supervised learning (with known $\mathbf{y}$), and this setting is assumed for the remainder of the post. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:2" role="doc-endnote">
+    <li id="fn:2">
       <p>For resources providing a deeper intuition on why this is the case, see <a href="https://math.stackexchange.com/questions/1326429/intuition-of-multivariable-chain-rule">here</a> and <a href="https://math.stackexchange.com/questions/423/intuitive-reasoning-behind-the-chain-rule-in-multiple-variables">here</a>. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
-    <li id="fn:3" role="doc-endnote">
+    <li id="fn:3">
       <p>More precisely, backpropagation is designed to reduce the computation of common subexpressions without regard for memory. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
   </ol>
