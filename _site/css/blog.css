@@ -211,3 +211,36 @@ hr {
     margin: 0 7px;
   }
 }
+
+/* ul li a:after {
+  content:">";
+  float: right;
+  margin-right: 10px;
+} */
+
+details {
+	margin-left: 1em;
+}
+
+summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-left: -1em;
+}
+
+summary::after {
+  content: '>';
+  float: right;
+  margin-right: 10px;
+}
+
+details[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
