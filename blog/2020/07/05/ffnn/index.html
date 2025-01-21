@@ -5,7 +5,7 @@
     <meta content='width=device-width, initial-scale=1' name='viewport'/>
 
     <meta name='description' content='Manan Shah'>
-    <meta name='keywords' content='machine-learning'>
+    <meta name='keywords' content='machine learning, backpropagation'>
     <meta name='author' content='Manan Shah'>
 
     <link href='/css/callout.css' rel='stylesheet'/>
@@ -62,11 +62,11 @@ window.MathJax = {
     <div class='front-matter'>
         <div class='wrap'>
             <h1>Learning Feedforward Networks</h1>
-            <h4>I motivate and derive the backpropagation learning algorithm for feedforward networks.</h4>
+            <h4>We motivate and derive the backpropagation learning algorithm for feedforward networks.</h4>
             <div class='bylines'>
                 <div class='byline'>
-                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
-                    <p>05 July 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-learning</p>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2020-07-05 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2025-01-20&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine learning, backpropagation</p>
                 </div>
             </div>
             <div class='clear'></div>
@@ -156,7 +156,7 @@ feedforward network, so that the derivative $\partial \mathcal{L}(a^L, y) /
 <p><a href="https://en.wikipedia.org/wiki/Cross_entropy#Cross-entropy_minimization">Cross-entropy</a>
 is a typical loss function for classification problems, and <a href="https://en.wikipedia.org/wiki/Mean_squared_error#Regression">mean squared
 error</a> is typical
-for regression problems.</p>
+for regression problems. Of course, there are many others.</p>
 
 <h2 id="forward-propagation">Forward Propagation</h2>
 
@@ -214,9 +214,10 @@ every weight (and bias) in the network, an extremely expensive process.</p>
 
 <p>Backward propagation attempts to remedy such computational inefficiencies by
 updating weights in one backward pass through the network. To do so, we make
-extensive use of the <a href="https://en.wikipedia.org/wiki/Chain_rule">chain rule</a>.
-Let’s start by computing partials of the loss function with respect to the
-network weights and biases. We can write</p>
+extensive use of the <a href="https://en.wikipedia.org/wiki/Chain_rule">chain rule</a> for
+analytical computation of partial derivatives. Let’s start by computing
+partials of the loss function with respect to the network weights and biases.
+We can write</p>
 
 \[\begin{align}
 \frac{ \partial \mathcal{L}}{\partial w_{ji}^l} &amp;= \frac{\partial
@@ -270,7 +271,7 @@ layer’s partials depend on the layer after it, all that’s left to do is
 sequentially iterate backward through the network, computing partials as we
 go—hence, backward propagation.</p>
 
-<h3 id="the-backprop-algorithm">The Backprop Algorithm</h3>
+<h3 id="the-algorithm">The Algorithm</h3>
 
 <p>Our algorithm thus proceeds as follows. We begin by compute the partial
 derivatives of the loss function with respect to the activations of the final
@@ -313,6 +314,23 @@ perform this step for the input layer.</p>
 <p>We now have $\partial \mathcal{L} / \partial a_i^l$ for all layers $l$, and so
 we can compute the partial derivatives for all weights and biases, completing
 our update.</p>
+
+<h2 id="looking-ahead">Looking Ahead</h2>
+
+<p>In this post, we’ve analytically derived the backpropagation algorithm for the feedforward
+neural nework. While the intuition of learning parameters by updating in the
+negative direction of its gradient with respect to $\mathcal{L}$ remains accurate, generalizing
+backpropagation to arbitrary networks (functions $f : \mathbb{R}^n \to \mathbb{R}^m$) requires
+deeper study (and more math).</p>
+
+<p>In later posts, we’ll cover the concepts that power the design and
+implementation of <em>generalized backpropagation</em>, core to automatic
+differentiation libraries such as <code class="language-plaintext highlighter-rouge">autograd</code> and <code class="language-plaintext highlighter-rouge">PyTorch</code> that form the
+backbone of modern-day machine learning research. For now, it’s worth knowing
+that the reverse-mode automatic differentiation algorithm implemented by these
+packages computes parameter differentials in a very similar manner to the
+backpropagation algorithm derived here when applied to a feedforward network,
+while also generalizing to other functions composed of differentiable components.</p>
 
     </div>
     <div id='bibliography'>
