@@ -1,11 +1,11 @@
 <html>
 <head>
-    <title>Fully Convolutional Networks</title>
+    <title>Grokking Fully Convolutional Networks</title>
     <meta charset='UTF-8'>
     <meta content='width=device-width, initial-scale=1' name='viewport'/>
 
     <meta name='description' content='Manan Shah'>
-    <meta name='keywords' content='machine-learning'>
+    <meta name='keywords' content='machine learning'>
     <meta name='author' content='Manan Shah'>
 
     <link href='/css/callout.css' rel='stylesheet'/>
@@ -61,12 +61,12 @@ window.MathJax = {
 </div>
     <div class='front-matter'>
         <div class='wrap'>
-            <h1>Fully Convolutional Networks</h1>
-            <h4>I discuss some fundamental ideas behind fully convolutional networks, including the transformation of fully connected layers to convolutional layers and upsampling via transposed convolutions ("deconvolutions").</h4>
+            <h1>Grokking Fully Convolutional Networks</h1>
+            <h4>We discuss the fundamental ideas behind fully convolutional networks, including the transformation of fully connected layers to convolutional layers and upsampling via transposed convolutions ("deconvolutions").</h4>
             <div class='bylines'>
                 <div class='byline'>
-                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
-                    <p>16 August 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-learning</p>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2020-08-16 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2025-01-10&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine learning</p>
                 </div>
             </div>
             <div class='clear'></div>
@@ -100,7 +100,7 @@ is with a sliding window; one can subsample a region of pixels around every
 given input pixel, pass that region as input to a convolutional network, and
 assign the prediction of the network to the input pixel’s location in the
 segmentation map. Doing so for every input pixel would indeed work, but would be
-incredibly computationally expensive, requiring one inference for each pixel.</p>
+incredibly computationally expensive, requiring one inference step for each pixel.</p>
 
 <p>Fully convolutional networks attempt to solve this problem by (a) replacing the
 fully connected layers in traditional convolutional networks with equivalent
@@ -119,13 +119,13 @@ previous layer activations into a single set of fully connected nodes. This loss
 of spatial information makes it impossible to create a one-to-one mapping
 between input and output pixels in a network with fully connected layers.</p>
 
-<p>However, we can note that the only difference between fully connected and
-convolutional layers is that the neurons in a convolutional layer are only
-connected to a local region of the input (<em>receptive fields</em>) and that neurons
-associated with a feature map share parameters (<em>parameter sharing</em>).<sup id="fnref:a"><a href="#fn:a" class="footnote" rel="footnote" role="doc-noteref">1</a></sup> Since the
-neurons in fully connected and convolutional layers still compute dot products,
-they share a functional form, and so it’s possible to convert between fully
-connected and convolutional layers.<sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">2</a></sup></p>
+<p>However, the only difference between fully connected and convolutional layers
+is that the neurons in a convolutional layer are only connected to a local
+region of the input (<em>receptive fields</em>) and that neurons associated with a
+feature map share parameters (<em>parameter sharing</em>).<sup id="fnref:a"><a href="#fn:a" class="footnote" rel="footnote" role="doc-noteref">1</a></sup> Since the neurons in
+fully connected and convolutional layers still compute dot products, they share
+a functional form, and so it’s possible to convert between fully connected and
+convolutional layers.<sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">2</a></sup></p>
 
 <p>Precisely, we can convert fully connected layers to convolutional layers by
 replacing a fully connected layer with a convolutional layer that has a
@@ -146,7 +146,7 @@ an output of size $[6 \times 6 \times 1000]$ as $12 - 7 + 1 = 6$. As a result,
 instead of a single vector of class scores of length 1000, we obtain a $6 \times
 6$ array of class scores across the $384 \times 384$ input image. This array
 corresponds to scores we would obtain were we to slide a $224 \times 224$ patch
-across the $384 \times 384$ image in striids of 32 pixels—but we obtain it
+across the $384 \times 384$ image in strides of 32 pixels—but we obtain it
 in one forward pass!</p>
 
 <h2 id="upsampling-with-transposed-convolutions">Upsampling with Transposed Convolutions</h2>
@@ -252,16 +252,18 @@ now make sense of the phrase used in Section 3.3. of <a class="citation" href="#
 <p>Indeed, upsampling performs a “backwards” convolution according to a stride
 that defines how the output is tiled for movement in the input.</p>
 
-<p>What’s in a name? The learnable upsampling operation has many names in
-literature, including deconvolution, upconvolution, fractionally strided
-convolution, and backward strided convolution. Deconvolution is a rather
-unfortunate name (as the upsampling layer doesn’t actually perform the
-deconvolution operation), but has stuck around for historical reasons.
-Upconvolution is used to refer to the fact that the output of a learnable
-upsampling layer is larger than the input. Fractionally strided convlution is
-used as strides often refer to how many input values are moved for every output
-value in a convolution operation, so learnable upsampling employs fractional
-strides (as multiple output values are moved for every input value).</p>
+<h3 id="whats-in-a-name">What’s in a name?</h3>
+
+<p>The learnable upsampling operation has many names in literature, including
+deconvolution, upconvolution, fractionally strided convolution, and backward
+strided convolution. Deconvolution is a rather unfortunate name (as the
+upsampling layer doesn’t actually perform the deconvolution operation), but has
+stuck around for historical reasons.  Upconvolution is used to refer to the
+fact that the output of a learnable upsampling layer is larger than the input.
+Fractionally strided convlution is used as strides often refer to how many
+input values are moved for every output value in a convolution operation, so
+learnable upsampling employs fractional strides (as multiple output values are
+moved for every input value).</p>
 
 <h2 id="summary">Summary</h2>
 

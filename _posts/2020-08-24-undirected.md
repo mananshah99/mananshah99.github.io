@@ -4,8 +4,9 @@ title: "Learning Undirected Graphical Models"
 subtitle: Undirected graphical models formed a large part of the initial push for
           machine intelligence, and remain relevant today. Here, I motivate and 
           derive Monte Carlo-based learning algorithms for such models.
-date: 2020-09-06
-keywords: machine-intelligence
+posted: 2020-09-06
+updated: 2020-09-06
+keywords: machine intelligence, generative models
 published: true
 ---
 
