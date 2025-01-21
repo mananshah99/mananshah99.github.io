@@ -1,0 +1,470 @@
+<html>
+<head>
+    <title>Learning Undirected Graphical Models</title>
+    <meta charset='UTF-8'>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+
+    <meta name='description' content='Manan Shah'>
+    <meta name='keywords' content='machine intelligence, generative models'>
+    <meta name='author' content='Manan Shah'>
+
+    <link href='/css/callout.css' rel='stylesheet'/>
+    <link href='/css/blog.css' rel='stylesheet'/>
+    <link href='/css/trac.css' rel='stylesheet'/>
+    <link href='/css/markdown.css' rel='stylesheet'/>
+
+    <script type='text/x-mathjax-config'>
+            
+MathJax.Hub.Config({
+  jax: ['input/TeX', 'output/HTML-CSS'],
+  tex2jax: {
+    inlineMath: [ ['$', '$'] ],
+    displayMath: [ ['$$', '$$']],
+    processEscapes: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    extensions: ['color.js']
+  },
+  messageStyle: 'none',
+  'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
+});
+
+</script>
+
+<!-- this is necessary to get the mathjax config working! -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  }
+};
+</script>
+
+<script type='text/javascript' src='https://cdn.jsdelivr.net/npm/mathjax@3.0.0/es5/tex-mml-chtml.js'></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+
+
+
+    <!--- <script src="/assets/katex.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" integrity="sha512-LQNxIMR5rXv7o+b1l8+N1EZMfhG7iFZ9HhnbJkTp4zjNr5Wvst75AqUeFDxeRUa7l5vEDyUiAip//r+EFLLCyA==" crossorigin="anonymous"></script>
+    <script src="/assets/pseudocode.min.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="/assets/pseudocode.min.css" type="text/css">
+
+</head>
+<body>
+<div class='content'>
+    <div class='nav'>
+    <ul class='wrap'>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/blog'>Blog</a></li>
+        <li><a href='/feed.xml'>RSS</a></li>
+    </ul>
+</div>
+    <div class='front-matter'>
+        <div class='wrap'>
+            <h1>Learning Undirected Graphical Models</h1>
+            <h4>Undirected graphical models formed a large part of the initial push for machine intelligence, and remain relevant today. Here, I motivate and derive Monte Carlo-based learning algorithms for such models.</h4>
+            <div class='bylines'>
+                <div class='byline'>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2020-09-06 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2020-09-06&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine intelligence, generative models</p>
+                </div>
+            </div>
+            <div class='clear'></div>
+        </div>
+    </div>
+    <div class='wrap article'>
+        <h2 id="introduction">Introduction</h2>
+
+<p>Graphical models aim to define (and subsequently learn) a probability
+distribution over a set of hidden and observed variables. These variables are
+represented as nodes, with edges defining modeled interactions between the
+variables. Directed graphical models (such as the Bayesian network) allow for
+the principled definition of distributions over these variables by defining
+directed relationships between nodes, while undirected models (such as the
+Markov random field) define an <em>energy function</em> modeling undirected
+interactions between nodes and compute a normalization function to define a
+probability distribution from the energy function.</p>
+
+<p>Learning directed models is often performed with maximum likelihood estimation,
+which has a <a href="https://ermongroup.github.io/cs228-notes/learning/directed/">closed form
+solution</a> in fully
+observed Bayesian networks and requires more nuanced techniques including
+<a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">expectation–maximization and variational
+learning</a> for partially
+observed networks involving latent variables.<sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">1</a></sup> Both of these techniques
+leverage that $p(x)$ is defined in terms of the conditional probability
+distributions specified in the directed graphical model.</p>
+
+<p>Learning undirected models, however, is more challenging as the lack of directed
+connections makes it impossible to define conditional probability distributions
+(and therefore directly define $p(x)$ in terms of nodes and edges). Instead,
+undirected models define an energy function $\tilde{p}(x; \theta)$ over their
+constituent nodes and additionally compute a normalization (also called
+paritition) function $Z(\theta) = \sum_x \tilde{p}(x; \theta)$ so that
+$\tilde{p}(x; \theta) / Z(\theta)$ defines a probability distribution. Since
+the partition function require summing over all node values, it’s often
+intractable, making learning more challenging.</p>
+
+<p>In this post, we’ll delve into working with the partition function, motivating
+maximum likelihood-based learning algorithms for undirected graphical models.
+In particular, we’ll focus on the contrastive divergence algorithm, known for
+its ability to efficiently train Restricted Boltzmann Machines (RBMs). The
+material in this post is significantly inspired and derived from Section 18.1
+in <a class="citation" href="#goodfellow2016deep">(Goodfellow et al., 2016)</a>; the reader is recommended to peruse the
+chapter for related contents and additional details.</p>
+
+<h2 id="working-with-the-partition-function">Working with the Partition Function</h2>
+
+<p>Undirected graphical models define an unnormalized probability distribution
+(also called an energy function) $\tilde{p}(x, z; \theta)$ over cliques of
+variables in the graph, where $x$ collects the observed variables and $z$
+collects hidden variables. In order to obtain a valid probability distribution,
+we must normalize $\tilde{p}$, so that</p>
+
+\[p(x, z; \theta) = \frac{1}{Z(\theta)} \tilde{p}(x, z; \theta)\]
+
+<p>where</p>
+
+\[Z(\theta) = \sum_{x, z} \tilde{p}(x, z; \theta)\]
+
+<p>for discrete $x$ and $z$; the continuous analog simply requires replacing the
+sum with an integral. It’s immediately obvious that this operation is
+intractable for most interesting models. While some models are designed with 
+the express purpose of simplifying the partition function, we will not bother
+ourselves with such specialized structures here; we’ll instead focus on
+training models with intractable $Z(\theta)$.</p>
+
+<h3 id="decomposing-the-likelihood">Decomposing the Likelihood</h3>
+
+<p>We’ll sidestep the question of inference with an intractable partition function
+and instead focus on the task of learning. The principle of maximum likelihood
+tells us that we should maximize the probability of the observed data given
+our model; a canonical way to do so is by gradient descent. In particular,
+we have</p>
+
+\[\begin{align*}
+\nabla_\theta \log p(x; \theta) &amp;= \nabla_\theta \log \sum_z p(x, z; \theta) \\
+                                &amp;= \nabla_\theta \log \sum_z \left( \frac{ \tilde{p}(x, z; \theta)}{Z(\theta)} \right) \\
+                                &amp;= \underbrace{\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta)}_{\text{Positive phase}} \underbrace{- \nabla_\theta \log Z(\theta)}_{\text{Negative phase}}
+\end{align*}\]
+
+<p>This decomposition into a <em>positive</em> and <em>negative</em> phase of learning is well-known; we’ll
+have more to say about the interpretation of each phase as we continue our derivation. 
+For now, let’s look at each component in turn.</p>
+
+<p><em>Positive Learning Phase.</em> For our models of interest, we can reasonably assume
+that summing over all values of $z$ is an intractable operation. However, we can
+approximate the positive phase term with importance sampling and a variational
+lower bound by following the techniques used for latent variable models 
+described <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">here</a>. Specifically,
+we begin by rewriting the postive phase as an expectation:</p>
+
+\[\begin{align*}
+\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &amp;= \nabla_\theta \sum_z q(z \mid x) \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
+x)} \\
+&amp;= \nabla_\theta \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{\tilde{p}(x,z ; \theta)}{q(z \mid
+x)} \right]
+\end{align*}\]
+
+<p>To move the logarithm inside the expectation, we apply Jensen’s inequality,
+noting that equality is preserved if $q(z \mid x) = p(z \mid x; \theta)$ (where
+we fix $\theta$ for the $q$ distribution).<sup id="fnref:2"><a href="#fn:2" class="footnote" rel="footnote" role="doc-noteref">2</a></sup> Fixing $q(z \mid x) = p(z \mid x;
+\theta)$, we have that</p>
+
+\[\begin{align}
+\nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) &amp;= \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log \tilde{p}(x,z ; \theta) - \nabla_\theta \mathbf{E}_{z \sim q(z \mid x)} \log  {q(z \mid x)} \\
+&amp;= \nabla_\theta \mathbf{E}_{z \sim p(z \mid x)} \log \tilde{p}(x, z; \theta)
+\end{align}\]
+
+<p>Which has the intuitive interpretation of maximizing the energy function of the
+undirected model with respect to likely “completions” $z \sim p(z \mid x)$ of
+the hidden variables given examples $x$ from the true data distribution. The
+positive learning phase therefore increases the likelihood of true data in the
+model. For directed graphical models (with no partition function), this is all
+we need to do: the positive learning phase can be performed with
+expectation-maximization in the case where $p(z \mid x)$ is tractable and can be
+approximated with variational methods for intractable $p(z \mid x)$. For models
+with a partition function, we need to understand the negative learning phase.</p>
+
+<p><em>Negative Learning Phase.</em> The negative learning phase consists of computing
+the gradient of the partition function with respect to parameters $\theta$. 
+Looking more closely at this gradient (and omitting the $\theta$ argument of
+$Z(\theta)$ for clarity), we have</p>
+
+\[\begin{align*}
+\nabla_\theta \log Z &amp;= \frac{\nabla_\theta Z}{Z} \\
+&amp;= \frac{\nabla_\theta \sum_{x, z} \tilde{p}(x, z)}{Z} \\
+&amp;= \frac{\sum_{x, z} \nabla_\theta \tilde{p}(x, z)}{Z}
+\end{align*}\]
+
+<p>With the mild assumption that ${p}(x, z) &gt; 0$ for all $x, z$, we can substitute
+$\tilde{p}(x, z) = \exp(\log \tilde{p}(x, z))$ to obtain</p>
+
+\[\begin{align}
+\nabla_\theta \log Z &amp;= \frac{\sum_{x, z} \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
+                    &amp;= \frac{\sum_{x, z} \exp(\log \tilde{p}(x, z)) \nabla_\theta \exp(\log \tilde{p}(x, z))}{Z} \\
+                    &amp;= \sum_{x, z} \left( \frac{\tilde{p}(x, z)}{Z} \nabla_\theta \exp(\log \tilde{p}(x, z)) \right) \\
+                    &amp;= \sum_{x, z} p(x, z) \nabla_\theta \exp(\log \tilde{p}(x, z)) \\
+                    &amp;= \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z)
+\end{align}\]
+
+<p>which allows us to express the negative learning phase as an expectation over
+$x$ and $z$ drawn from the model distribution.</p>
+
+<h3 id="putting-it-all-together">Putting it all Together</h3>
+
+<p>Our work in the prior sections allowed us to re-express the positive and negative
+learning phases as expectations:</p>
+
+\[\begin{align}
+\nabla_\theta \log p(x; \theta) &amp;= \nabla_\theta \log \sum_z \tilde{p}(x, z; \theta) - \nabla_\theta \log Z(\theta) \\
+&amp;= \mathbf{E}_{z \sim p(z \mid x)} \nabla_\theta \log \tilde{p}(x, z; \theta) - \mathbf{E}_{x, z \sim p(x, z)} \nabla_\theta \log \tilde{p}(x, z; \theta)
+\end{align}\]
+
+<p>which enables the use of Monte Carlo methods for maximizing the resulting
+likelihood while avoiding intractability problems in both phases. This
+maximization admits a useful interpretation of both phases. In the positive
+phase, we increase $\log \tilde{p}(x, z; \theta)$ for $x$ drawn from the <em>data
+distribution</em> (and $z$ sampled from the conditional). In the negative phase,
+we decrease the partition function by decreasing $\log \tilde{p}(x, z)$ for
+$x, z$ drawn from the <em>model distribution</em>. As a result, the positive phase
+pushes <em>down</em> the energy of training examples and the negative phase pushes
+<em>up</em> the energy of samples drawn from the model.</p>
+
+<h2 id="learning-undirected-models">Learning Undirected Models</h2>
+
+<p>Now that we’ve broken down the loss function corresponding to maximum likelihood
+parameter estimation in undirected models into two parts, each written as
+expectations over different distributions, we are prepared to discuss learning
+algorithms for undirected models.</p>
+
+<p><em>A First Approach.</em> Since we’ve re-expressed our loss function as a sum of expectations, an
+immediate and intuitive approach to approximating the loss is via Monte Carlo
+approximations of each expectation. In particular, we can compute the positive
+phase expectation by sampling $x$ from the training set, $z$ according to $p(z
+\mid x)$, and computing the gradient with those $x$ and $z$.<sup id="fnref:3"><a href="#fn:3" class="footnote" rel="footnote" role="doc-noteref">3</a></sup> Since the negative
+phase requires sampling from the model distribution, we can perform such
+sampling by initializing $m$ samples of $(x, z)$ to random values and applying a
+Markov Chain Monte Carlo method (such as Gibbs sampling or Metropolis-Hastings
+sampling) to generate representative $(x, z)$ from the model distribution. The
+expectation can then be computed as an average of $\nabla_\theta \tilde{p}(x, z;
+\theta)$ over these samples. This approach is made explicit in Algorithm 1.</p>
+
+<pre id="read-1" style="display:none;">
+  
+\begin{algorithm}
+\caption{A naive Markov Chain Monte Carlo algorithm for maximizing the log-likelihood of an undirected graphical model.}
+\begin{algorithmic}
+
+\PROCEDURE{NaiveMCMC}{k} \Comment{$k$ is the number of Gibbs steps}
+
+    \While{convergence criteria are not met}
+      \State{$g \gets 0$} 
+      \State{Sample a minibatch of $m$ examples $\{x^{(1)} \dots x^{(m)}\}$ from the training set}
+      \State{Sample $m$ examples $\{z^{(1)} \dots z^{(m)}\}$ where $z^{(i)} \sim p(z \mid x^{(i)})$}
+      \State{$g \gets \frac{1}{m} \sum_{i=1}^m \nabla_\theta \tilde{p}(x^{(i)}, z^{(i)}; \theta)$}
+      
+      \State{Initialize a set of $m$ examples $\{\tilde{c}^{(1)} \dots \tilde{c}^{(m)}\}$ to random values} \Comment{Let $\tilde{c}^{(j)} = (\tilde{x}^{(j)}, \tilde{z}^{(j)})$}
+      \For{$i = 1 \dots k$}
+        \For{$j = 1 \dots m$}
+          \State{$\tilde{c}^{(j)} \gets \texttt{gibbs\_update}(\tilde{c}^{(j)})$}
+        \EndFor
+      \EndFor
+      \State{$g \gets g - \frac{1}{m} \sum_{i = 1}^m \nabla_\theta \log \tilde{p}(\tilde{x}^{(j)}, \tilde{z}^{(j)})$}
+      \State{$\theta \gets \theta + \epsilon g$} \Comment{For some fixed $\epsilon$}
+    \EndWhile
+\ENDPROCEDURE
+\end{algorithmic}
+\end{algorithm}
+
+</pre>
+<div id="goal-1"></div>
+<script type="text/javascript">
+  var code = document.getElementById("read-1").textContent;
+  var parentEl = document.getElementById("goal-1");
+  var options = {
+      lineNumber: true
+  };
+  pseudocode.render(code, parentEl, options);
+</script>
+
+<p>While this naive method may work well in expectation, it has numerous issues in
+practice that render it infeasible. In particular, the initialization of random
+$x, z$ that are subsequently altered via repeated Gibbs sampling to reflect
+samples from the model distribution is extremely sensitive to the randomly
+chosen input and requires a burning in phase for each iteration of the
+algorithm. A reasonable solution to this random initialization is to initialize
+the Markov chains for the sampling procedure from a distribution that is close
+to the model distribution; this will reduce the number of steps required for the
+burn-in phase and reduce undesirable sensitivity to noise. Fortunately, we have
+such a distribution that’s easy to sample from on hand: the data distribution!
+While the data distribution is quite distinct from the model distribution in
+initial iterations, the distributions will ideally align as training proceeds,
+after which the negative phase will start to become more accurate.</p>
+
+<p><em>Contrastive Divergence.</em> The contrastive divergence (CD) algorithm does just
+this, initializing the Markov chain at each step with samples from the data
+distribution. As mentioned previously, this optimization is likely to perform
+poorly at the beginning of the training process when the data and model
+distributions are far apart, but as the postive phase is given time to act (and
+improve the model’s probability of the data), the model distribution will become
+closer to the data distribution and therefore make the negative phase more
+accurate. This approach is made explicit in Algorithm 2, where the only difference
+from Algorithm 1 is the initialization of $\tilde{c}^{(j)}$ to the previously
+sampled values from the data distribution (as opposed to random values).</p>
+
+<pre id="read-2" style="display:none;">
+  
+\begin{algorithm}
+\caption{The contrastive divergence algorithm for maximizing the log-likelihood of an undirected graphical model.}
+\begin{algorithmic}
+
+\PROCEDURE{ContrastiveDivergence}{k} \Comment{$k$ is the number of Gibbs steps}
+
+    \While{convergence criteria are not met}
+      \State{$g \gets 0$} 
+      \State{Sample a minibatch of $m$ examples $\{x^{(1)} \dots x^{(m)}\}$ from the training set}
+      \State{Sample $m$ examples $\{z^{(1)} \dots z^{(m)}\}$ where $z^{(i)} \sim p(z \mid x^{(i)})$}
+      \State{$g \gets \frac{1}{m} \sum_{i=1}^m \nabla_\theta \tilde{p}(x^{(i)}, z^{(i)}; \theta)$}
+      
+      \State{Initialize a set of $m$ examples $\{\tilde{c}^{(1)} \dots \tilde{c}^{(m)}\}$ to the previously sampled values} \Comment{Let $\tilde{c}^{(j)} = (\tilde{x}^{(j)}, \tilde{z}^{(j)})$}
+      \For{$i = 1 \dots k$}
+        \For{$j = 1 \dots m$}
+          \State{$\tilde{c}^{(j)} \gets \texttt{gibbs\_update}(\tilde{c}^{(j)})$}
+        \EndFor
+      \EndFor
+      \State{$g \gets g - \frac{1}{m} \sum_{i = 1}^m \nabla_\theta \log \tilde{p}(\tilde{x}^{(j)}, \tilde{z}^{(j)})$}
+      \State{$\theta \gets \theta + \epsilon g$} \Comment{For some fixed $\epsilon$}
+    \EndWhile
+\ENDPROCEDURE
+\end{algorithmic}
+\end{algorithm}
+
+</pre>
+<div id="goal-2"></div>
+<script type="text/javascript">
+  var code = document.getElementById("read-2").textContent;
+  var parentEl = document.getElementById("goal-2");
+  var options = {
+      lineNumber: true
+  };
+  pseudocode.render(code, parentEl, options);
+</script>
+
+<p>In essence, contrastive divergence provides a reasonable approximation to the
+negative phase, empirically performing better than the naive MCMC method
+presented in Algorithm 1. However, the CD approximation isn’t perfect –
+specifically, it doesn’t suppress regions of high probability under the model
+that have low probability under the data distribution. Due to its initialization
+of its Markov chains from data points, CD is unlikely to visit such regions
+(called spurious modes) that are far from the data generating distribution. As a
+result, models trained with CD may waste probability mass on these modes,
+struggling to place high mass on the correct modes of the data generating
+distribution.</p>
+
+<p>A variation on contrastive divergence that has seen some empirical success is
+the stochastic maximum likelihood (also called persistent contrastive
+divergence) algorithm, which is inspired by the idea that so long as the steps
+taken by the gradient ascent algorithm are small, the model distribution will
+not change substantially at each step <a class="citation" href="#swersky2010tutorial">(Swersky et al., 2010)</a>. As a result, samples from the previous
+step will likely be close to being reasonable samples for the current model’s
+distribution, and as a result will require less Markov chain mixing.
+Initializing Markov chains with samples from previous steps also allows these
+chains to be continually updated through the learning process (as opposed to
+being restarted with random values at each step), thereby increasing the
+likelihood of exploring the whole search space and avoiding the spurious
+mode problem present in CD.</p>
+
+<h2 id="restricted-boltzmann-machines">Restricted Boltzmann Machines</h2>
+
+<p>We’ve spent the past two sections discussing the theoretical training of
+undirected models; in this section, we’ll discuss an undirected model, the
+restricted boltzmann machine (RBM), that satisfies many of the desirable
+properties that enable the use of algorithms such as contrastive divergence to
+tackle the existence of a partition function <a class="citation" href="#hinton2012practical">(Hinton, 2012)</a>. In
+particular, the RBM has a very desirable factorization allowing for the simple
+computation of $p(z \mid x)$ and $p(x \mid z)$, which makes the Gibbs sampling
+steps tractable.</p>
+
+<p>The restricted boltzmann machine is defined over a set of visible variables $x$
+and hidden variables $z$ so that</p>
+
+\[p(x, z; \theta) = \frac{\exp(-\mathcal{E}(x, z; \theta))}{Z(\theta)}\]
+
+<p>for energy function $\mathcal{E}$ defined over $D$-dimensional binary $x$ and $K$-dimensional binary $z$ as</p>
+
+\[\mathcal{E}(x, z; \theta) = -\sum_{i = 1}^D \sum_{j = 1}^K v_i W_{ij} h_j - \sum_{i = 1}^D x_ic_i - \sum_{j = 1}^K z_jb_j\]
+
+<p>where $\theta = (W, b, c)$. The graphical representation of RBMs with
+connections solely between hidden and observed units (and no connections between
+units of the same type) admits the property that all observed units become
+independent when conditioned on hidden units (and vice versa). As derived in <a class="citation" href="#ping2016learning">(Ping, 2016)</a>, we have</p>
+
+\[\begin{align*}
+p(x_i = 1 \mid z, \theta) &amp;= \sigma \left( \sum_{j = 1}^K W_{ij} z_j \right) \\
+p(z_i = 1 \mid x, \theta) &amp;= \sigma \left( \sum_{j = 1}^H W_{ij} x_j \right)
+\end{align*}\]
+
+<p>The simple forms of these expressions allow for a simple and efficient Gibbs
+sampler. In particular, the RBM can be trained directly with Algorithm 2 (CD);
+$p(z \mid x)$ in Line 5 is tractable by block sampling with $x$ fixed, and the
+Gibbs update in Line 10 is tractable by repeated block sampling with $x$ fixed
+to obtain an updated $z$ and $z$ fixed to obtain an updated $x$. By extension,
+stochastic maximum likelihood can be used to train RBMs efficiently as well.
+More discussion on RBM-specific training can be found in <a class="citation" href="#swersky2010tutorial">(Swersky et al., 2010)</a>.</p>
+
+<h2 id="summary--further-reading">Summary &amp; Further Reading</h2>
+
+<p>Undirected graphical models allow for the more general expression of
+dependencies between nodes through the use of unnormalized energy functions over
+cliques of nodes. However, this increased expressivity comes at a cost when
+learning such models: dealing with the intractable partition function when
+maximizing model likelihood is challenging.</p>
+
+<p>In this post, we’ve shown that breaking down the likelihood function of
+generalized undirected models into a positive and negative phase and
+subsequently Monte Carlo estimating each phrase yields promising algorithms
+for the optimization of such models. Varying initializations for the Gibbs
+samplers to estimate both phases yield differing algorithms: the simple
+Markov Chain Monte Carlo method employs a random initializer, the contrastive
+divergence algorithm initializes Gibbs samplers with samples from the data
+distribution, and stochastic maximum likelihood initializes samples from
+those obtained at previous iterations (and performs best in practice). We
+concluded with a brief foray into restricted boltzmann machines, shallow
+undirected models that enable efficient training via the aformentioned
+approaches due to their desirable factorization.</p>
+
+<p>Multiple other methods have been developed to train undirected models; the
+Monte Carlo estimation procedure here is only one of many. In particular,
+pseudolikelihood, score matching, and noise-contrastive estimation follow
+different paradigms to deal with the partition function, and are worth
+further examination.</p>
+
+<h2 id="notes">Notes</h2>
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1">
+      <p>This is because the introduction of latent variables introduces a sum $p(x) = \sum_z p(x, z)$, which poses challenges when computing the log-likelihood of the data. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2">
+      <p>If $p(z \mid x)$ is intractable, we can still derive a lower bound for the expectation; see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post on latent variable model learning</a> for further information. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3">
+      <p>In this post, we assume that computing the conditional $p(z \mid x)$ is tractable, therefore allowing for a Monte Carlo evaluation of the expectation in the positive phase. If this were not the case, variational methods could be used to approximately evaluate the conditional, but we won’t worry ourselves with those complexities here (see <a href="https://mananshah99.github.io/blog/2020/06/23/lvm/">this post</a> if you’re curious). <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+    </div>
+    <div id='bibliography'>
+        <div class='wrap'>
+            <ol class="bibliography"><li><span id="goodfellow2016deep">Goodfellow, I., Bengio, Y., &amp; Courville, A. (2016). <i>Deep learning</i>. MIT press.</span></li>
+<li><span id="swersky2010tutorial">Swersky, K., Chen, B., Marlin, B., &amp; De Freitas, N. (2010). A tutorial on stochastic approximation algorithms for training restricted Boltzmann machines and deep belief nets. <i>2010 Information Theory and Applications Workshop (ITA)</i>, 1–10.</span></li>
+<li><span id="hinton2012practical">Hinton, G. E. (2012). A practical guide to training restricted Boltzmann machines. In <i>Neural networks: Tricks of the trade</i> (pp. 599–619). Springer.</span></li>
+<li><span id="ping2016learning">Ping, W. (2016). <i>Learning and Inference in Latent Variable Graphical Models</i> [PhD thesis]. UC Irvine.</span></li></ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>
