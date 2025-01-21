@@ -1,11 +1,11 @@
 <html>
 <head>
-    <title>Latent Variable Models</title>
+    <title>Learning Directed Latent Variable Models</title>
     <meta charset='UTF-8'>
     <meta content='width=device-width, initial-scale=1' name='viewport'/>
 
     <meta name='description' content='Manan Shah'>
-    <meta name='keywords' content='machine-intelligence'>
+    <meta name='keywords' content='machine learning, generative models'>
     <meta name='author' content='Manan Shah'>
 
     <link href='/css/callout.css' rel='stylesheet'/>
@@ -61,24 +61,27 @@ window.MathJax = {
 </div>
     <div class='front-matter'>
         <div class='wrap'>
-            <h1>Latent Variable Models</h1>
-            <h4>Directed latent variable models provide a powerful way to represent complex distributions by combining simple ones. However, they often have intractable log-likelihoods, yielding complicated learning algorithms. In this post, I hope to build intuition for these concepts.</h4>
+            <h1>Learning Directed Latent Variable Models</h1>
+            <h4>Directed latent variable models provide a powerful way to represent complex distributions by combining simple ones. However, they often have intractable log-likelihoods, yielding complicated learning algorithms. In this post, we build intuition for these concepts.</h4>
             <div class='bylines'>
                 <div class='byline'>
-                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
-                    <p>23 June 2020&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine-intelligence</p>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2020-06-23 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2025-01-20&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine learning, generative models</p>
                 </div>
             </div>
             <div class='clear'></div>
         </div>
     </div>
     <div class='wrap article'>
-        <p>It’s taken me a while to fully grasp directed latent variable models, and I hope
-to use this post as a way to collect my thoughts and provide a concise
-examination of latent variable representation, learning, and inference.
-Significant portions of this material are inspired by Stanford’s <a href="cs228.stanford.edu">CS
-228</a> and <a href="cs236.stanford.edu">CS 236</a> courses, taught by Dr.
-Stefano Ermon.</p>
+        <p>Consider the classical learning setting, in which we have a dataset $X$ and
+associated labels $Y$. This setting admits two general classes of models:
+discriminative and generative. Discriminative models learn $p(Y \mid X)$
+directly, while generative models learn $p(Y \mid X) = p(Y)p (X \mid Y) /
+p(X)$.  In this post, we aim to build intuition for a specific type of
+generative models called <em>directed latent variable models</em>, which aim to
+explictly model latent variables. Significant portions of this material are
+inspired by Stanford’s <a href="cs228.stanford.edu">CS 228</a> and <a href="cs236.stanford.edu">CS
+236</a> courses.</p>
 
 <h2 id="introduction">Introduction</h2>
 
@@ -88,11 +91,11 @@ outcomes for new, unseen samples drawn from the same distribution as $X$.
 Discriminative models learn the conditional distribution $p(Y \mid X)$ directly,
 and therefore directly predict outcomes given new samples $X$. On the other
 hand, generative models specify or learn both $p(Y)$ and $p(X \mid Y)$, and
-compute $p(Y \mid X)$ via Bayes’ rule. Both models are powerful in their own
-respects: while discriminative models tend to be more expressive as they are
-only required to learn the conditional, generative models allow for sampling
-new data from $p(X \mid Y)$ and performing inference with some variables $X_i$
-are unobserved by marginalizing over the unseen variables.</p>
+compute $p(Y \mid X)$ via Bayes’ rule. Both models have their own strengths:
+while discriminative models tend to be more easily parameterized as they are only
+required to learn the conditional, generative models allow for sampling new
+data from $p(X \mid Y)$ and performing inference with some variables $X_i$ 
+unobserved by marginalizing over the unseen variables.</p>
 
 <p>In an unsupervised setting, in which one is provided a dataset $X$ without
 associated outcomes, discriminative modeling assumptions are no longer
@@ -102,40 +105,46 @@ $p(X \mid Z)$ for latent variables $Z$. Intuitively, these variables $Z$
 represent unobserved factors of variation that contribute to diversity in $X$;
 for example, hair color and eye color in a dataset of faces or pencil stroke
 width and shape in a dataset of handwritten images. Learning such latent
-representations is both immensely powerful and incredibly challenging: while
-effective latent variables can improve modeling and understanding of the
-dataset, the unobserved nature of these variables implies that maximum
-likelihood cannot be directly applied as in supervised models.</p>
+representations is powerful and challenging: effective latent variables can
+model important factors of variation in the raw data, but their unobserved
+nature implies that maximum likelihood cannot be directly applied as in
+supervised models.</p>
 
-<p>The task of latent variable models (LVMs) is to explicity model latent
-variables as defined by the Bayes net $Z \to X$, with $Z$ unobserved and $X$
-observed. They therefore learn the joint distribution $p(X, Z; \theta)$ for
-parameters $\theta$. The remainder of this post will provide intuition for,
-and derivations of, learning algorithms for shallow and deep LVMs.</p>
+<p><strong>Latent variable models</strong> (LVMs) learn the joint distribution $p(X, Z;
+\theta)$ for parameters $\theta$ by explicitly modeling unobserved latent
+variables $Z$. The remainder of this post will provide intuition for, and
+derivations of, learning algorithms for shallow and deep LVMs.</p>
 
 <h2 id="shallow-latent-variable-models">Shallow Latent Variable Models</h2>
 
-<p>We begin our discussion of latent variable models with shallow LVMs, models that
-consist of a simple relationship between $Z$ and $X$. In particular, these
-models specify distributions $p(Z)$ and $p(X \mid Z)$ such that the computation
-of $p(Z \mid X)$ is tractable. One common example is the Gaussian mixture model,
-which specifies $z \sim \text{Categorical}(1 \dots k)$ and $p(x \mid z = k) =
-\mathcal{N}(x \mid \mu_k, \sigma_k)$.</p>
+<p>Shallow LVMs model a simple relationship between $Z$ and $X$. In particular,
+these models specify distributions $p(Z)$ and $p(X \mid Z)$ such that the
+computation of $p(Z \mid X)$ is tractable. One common example is the Gaussian
+mixture model, which specifies $z \sim \text{Categorical}(1 \dots k)$ and $p(x
+\mid z = k) = \mathcal{N}(\mu_k, \sigma_k)$. Let</p>
 
-<p>To learn such a model via maximum likelihood, we hope to solve the optimization
-problem</p>
+\[\theta = \{\mu_1, \dots, \mu_K, \sigma_1, \dots, \sigma_K\}\]
+
+<p>be the parameters that we wish to learn (optimize). Maximum likelihood
+estimation of $\theta$ amounts to solving the optimization problem</p>
 
 \[\text{argmax}_\theta \prod_{x \in \mathcal{D}}  p(x; \theta)
-= \text{argmax}_\theta \prod_{x \in \mathcal{D}} \sum_{z} p(x, z; \theta)\]
+\: = \: \text{argmax}_\theta \prod_{x \in \mathcal{D}} \sum_{z} p(x, z; \theta)\]
 
-<p>Our log-likelihood function is therefore</p>
+<p>over dataset $\mathcal{D}$. Our log-likelihood function is therefore</p>
 
 \[\ell(\theta; \mathcal{D}) = \sum_{x \in \mathcal{D}} \log \sum_z p(x, z; \theta)\]
 
-<p>which does not admit a decomposition conducive to optimization due to the
-summation within the logarithm.</p>
+<p>However, $\ell(\theta)$ is not generally tractable, due to the summation within
+the logarithm. In the empirical case, computing the log-likelihood requires
+summing over all (potentially exponential) states of $z$, and in the analytical
+case, the summation “blocks” the logarithm from being directly applied to the
+probability densities. While the Gaussian mixture model has an analytical
+solution (see
+<a href="https://stephens999.github.io/fiveMinuteStats/intro_to_em.html">here</a> for more
+details), we continue with a more general approach in this post.</p>
 
-<h3 id="a-first-attempt-sampling">A First Attempt: Sampling</h3>
+<h3 id="estimating-elltheta-via-sampling">Estimating $\ell(\theta)$ via Sampling</h3>
 
 <p>One potential solution to the issues posed by the marginalization over $z$ in the
 likelihood function is to perform a <a href="http://statweb.stanford.edu/~susan/courses/s208/node14.html">Monte Carlo
@@ -149,9 +158,11 @@ sample average:</p>
 
 <p>While this works in theory, in practice such estimates tend to perform poorly
 as the search space increases exponentially and the majority of randomly
-selected $z$s yield a small joint probability. A second, more intricate, attempt
-via <a href="https://en.wikipedia.org/wiki/Importance_sampling">importance sampling</a>
-with proposal distribution $q(z \mid x)$ yields</p>
+selected $z$s yield a small joint probability.</p>
+
+<p>A second, more intricate, attempt via <a href="https://en.wikipedia.org/wiki/Importance_sampling">importance
+sampling</a> with proposal
+distribution $q(z \mid x)$ yields</p>
 
 \[\begin{align}
 \sum_z p(x, z; \theta) = \sum_z q(z \mid x) \frac{p(x, z; \theta)}{q(z \mid x)} = \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]
@@ -162,26 +173,23 @@ the proposal distribution $q(z \mid x)$. Doing so alleviates the issue of few
 ‘‘hits’’ with uniform random sampling in the naive Monte Carlo estimate, given
 an appropriate choice of $q(z \mid x)$.</p>
 
-<p>But what should our proposal distribution be? Ideally, we’d like to be sampling
+<p>But what should our proposal distribution be? Ideally, we’d like to sample
 $z \sim p(z \mid x; \theta)$ to choose likely values of the latent variables,
-and so a reasonable choice would be $q(z \mid x) = p (z \mid x; \theta)$. Since
-we’re working with shallow LVMs, we can safely assume this is a simple
-distribution we can sample from (we can compute it with Bayes’ theorem). <sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">1</a></sup></p>
+and so the ideal choice would be $q(z \mid x) = p (z \mid x; \theta)$. In the
+shallow LVM case, we can analytically compute this distribution with Bayes’
+theorem. <sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">1</a></sup></p>
 
-<p>However, while this approach allows us to decompose the joint distribution $p(x,
-z; \theta)$, writing the log-likelihood function yields</p>
+<p>Regardless of our proposal distribution, we can decompose the joint distribution $p(x, z; \theta)$ and write the log-likelihood function as</p>
 
-\[\ell(\theta) = \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right]\]
+\[\ell(\theta) = \sum_{x \in \mathcal{D}} \log \left( \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \right)\]
 
-<p>which presents us with another problem: it is difficult to optimize the logarithm
-of a sum.</p>
+<p>While we have made progress towards tractability of estimating the log-likelihood, we are presented with the same issue as before, in a different form: it is unclear how to optimize the logarithm of a sum (expectation), where the expectation is over a distribution parameterized by $\theta$.</p>
 
-<h3 id="acheiving-tractability-a-lower-bound-on-elltheta">Acheiving Tractability: A Lower Bound on $\ell(\theta)$</h3>
+<h3 id="acheiving-tractability-a-lower-bound-on-elltheta-and-conditions-for-tightness">Acheiving Tractability: A Lower Bound on $\ell(\theta)$, and Conditions for Tightness</h3>
 
-<p>In order to transform the logarithm of a sum into a sum of logarithms in the
-log-likelihood function, we apply <a href="https://en.wikipedia.org/wiki/Jensen%27s_inequality">Jensen’s
+<p>In order to transform the logarithm of a sum into a sum of logarithms in $\ell(\theta)$, we apply <a href="https://en.wikipedia.org/wiki/Jensen%27s_inequality">Jensen’s
 inequality</a>. Doing so
-provides us a lower bound on $\ell(\theta)$:</p>
+provides us a lower bound:</p>
 
 \[\begin{align}
 \ell(\theta) &amp;= \sum_{x \in \mathcal{D}} \log \mathbf{E}_{z \sim q(z \mid x)} \left[ \frac{p(x, z; \theta)}{q(z \mid x)} \right] \\
@@ -236,11 +244,11 @@ particular, the algorithm proceeds as follows:</p>
 <p><strong>E(xpectation) step.</strong> For each $x \in \mathcal{D}$, compute the proposal
 distribution $q(z \mid x) = p(z \mid x, \theta_t)$; this is the posterior
 probability for all values $z$ can take. A common interpretation is that we
-``hallucinate’’ the missing values of the latent variables $z$ by computing the
+“hallucinate” the missing values of the latent variables $z$ by computing the
 distribution over $z$ using our current parameters, $\theta_t$. Note that this
 computation requires iterating over all values of $z$ in the discrete case and
-integrating in the continuous case, and is therefore only tractable in the
-shallow LVM case.</p>
+integrating in the continuous case, and is therefore only tractable for shallow
+latent variable models.</p>
 
 <p><strong>M(aximization) step.</strong> Compute $\theta_{t+1}$ given the posterior computed in
 the E step. This requires computing and updating along the gradient;
@@ -253,21 +261,22 @@ is located <a href="https://people.csail.mit.edu/rameshvs/content/gmm-em.pdf">he
 
 <p>We continue our discussion of latent variable models with deep LVMs, models that
 consist of a more complicated relationship between $Z$ and $X$. In particular,
-we remove the assumption that the $p(Z)$ and $p(X \mid Z)$ are chosen so that
+we relax the assumption that the $p(Z)$ and $p(X \mid Z)$ are chosen so that
 $p(Z \mid X)$ is tractable. While doing so allows for heightened expressivity,
-it also invalidates the tractability of $p(z \mid x; \theta)$, a requirement
-for the tightness of the ELBO in expectation—maximization.</p>
+we can no longer analytically compute $q(z \mid x) = p(z \mid x; \theta)$, a
+requirement for the tightness of the ELBO in expectation—maximization.</p>
 
-<p>One common example of a deep LVM is the variational autoencoder (VAE), which
+<p>One common example of a deep LVM is the <strong>variational autoencoder</strong> (VAE), which
 extends the Gaussian mixture model to a mixture of an infinite number of
 Gaussian distributions. VAEs are specified as $z \sim \mathcal{N}(0, I)$, $p(x
 \mid z) = \mathcal{N}(\mu_\theta(z), \Sigma_\theta(z))$, and $q(z \mid x;
 \lambda) = \mathcal{N}(\mu_\lambda(x), \sigma_\lambda(x))$. The necessity of
-specifying a proposal distribution $q$ will become evident as we build
-intuition for learning deep LVMs.</p>
+specifying a parameterized proposal distribution $q$ will become evident as we
+build intuition for learning deep LVMs.</p>
 
 <p>The log-likelihood function and learning problem for deep LVMs are the same
-as those of shallow LVMs.</p>
+as those of shallow LVMs: our problem here is learning with a parameterized
+$q(z \mid x; \lambda)$.</p>
 
 <h3 id="revisiting-the-elbo">Revisiting the ELBO</h3>
 
@@ -422,7 +431,7 @@ reader, normalizing flow models (using invertible transformations) and GANs
 <div class="footnotes" role="doc-endnotes">
   <ol>
     <li id="fn:1">
-      <p>If this worries you, that’s good! We throw away this assumption with deep latent variable models, but doing so makes learning far more complicated… <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+      <p>Note however that we cannot retain this assumption when working with deeper latent variable models, which do not admit a simple analytical solution to the posterior $p(z \mid x; \theta)$. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
     </li>
     <li id="fn:2">
       <p>'’Variational’’ is a term borrowed from variational calculus; in our context, it refers to the process of optimizing over functions. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
