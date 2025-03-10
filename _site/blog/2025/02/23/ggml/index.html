@@ -1,0 +1,910 @@
+<html>
+<head>
+    <title>Understanding ggml, from the ground up</title>
+    <meta charset='UTF-8'>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+
+    <meta name='description' content='Manan Shah'>
+    <meta name='keywords' content='machine learning, systems'>
+    <meta name='author' content='Manan Shah'>
+
+    <link href='/css/callout.css' rel='stylesheet'/>
+    <link href='/css/blog.css' rel='stylesheet'/>
+    <link href='/css/trac.css' rel='stylesheet'/>
+    <link href='/css/markdown.css' rel='stylesheet'/>
+
+    <script type='text/x-mathjax-config'>
+            
+MathJax.Hub.Config({
+  jax: ['input/TeX', 'output/HTML-CSS'],
+  tex2jax: {
+    inlineMath: [ ['$', '$'] ],
+    displayMath: [ ['$$', '$$']],
+    processEscapes: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    extensions: ['color.js']
+  },
+  messageStyle: 'none',
+  'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
+});
+
+</script>
+
+<!-- this is necessary to get the mathjax config working! -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  }
+};
+</script>
+
+<script type='text/javascript' src='https://cdn.jsdelivr.net/npm/mathjax@3.0.0/es5/tex-mml-chtml.js'></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+
+
+
+    <!--- <script src="/assets/katex.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" integrity="sha512-LQNxIMR5rXv7o+b1l8+N1EZMfhG7iFZ9HhnbJkTp4zjNr5Wvst75AqUeFDxeRUa7l5vEDyUiAip//r+EFLLCyA==" crossorigin="anonymous"></script>
+    <script src="/assets/pseudocode.min.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="/assets/pseudocode.min.css" type="text/css">
+
+</head>
+<body>
+<div class='content'>
+    <div class='nav'>
+    <ul class='wrap'>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/blog'>Blog</a></li>
+        <li><a href='/feed.xml'>RSS</a></li>
+    </ul>
+</div>
+    <div class='front-matter'>
+        <div class='wrap'>
+            <h1>Understanding ggml, from the ground up</h1>
+            <h4>On-device, low-latency language model inference have become increasingly important in designing production systems. Here, we dive deep into one leading framework for performant inference.</h4>
+            <div class='bylines'>
+                <div class='byline'>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2025-02-23 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2025-03-10&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine learning, systems</p>
+                </div>
+            </div>
+            <div class='clear'></div>
+        </div>
+    </div>
+    <div class='wrap article'>
+        <h2 id="introduction">Introduction</h2>
+
+<p><a href="https://github.com/ggml-org/ggml"><code class="language-plaintext highlighter-rouge">ggml</code></a> is a tensor library for machine
+learning. Like other popular tensor libraries (<em>e.g.</em> PyTorch, Tensorflow), it
+implements an n-dimensional tensor<sup id="fnref:1"><a href="#fn:1" class="footnote" rel="footnote" role="doc-noteref">1</a></sup>, a set of tensor operations that chain
+tensors together in a computational graph, and reverse-mode automatic
+differentiation. It distinguishes itself in its design for low-latency,
+low-overhead inference compute: there are no memory allocations during a model
+forward or backward pass (akin to TensorFlow’s static computational graph model<sup id="fnref:2"><a href="#fn:2" class="footnote" rel="footnote" role="doc-noteref">2</a></sup>),
+deep care is given to variable alignment and low-level systems optimizations,
+and a wide variety of execution backends are supported (most notably Apple
+Metal).</p>
+
+<p>It’s often the case that the best way to understand the workings of a system is
+to fully grok its internals. In this post, we’ll do just that, starting with a
+simple example. This post is based on <code class="language-plaintext highlighter-rouge">ggml</code> tree
+<a href="https://github.com/ggml-org/ggml/tree/9a4acb374565f4146b8d6eb1cffdcd7d437d1ba2"><code class="language-plaintext highlighter-rouge">9a4ac</code></a>;
+to follow along, check out the repository at that commit.</p>
+
+<h3 id="precursor-cmake">Precursor: CMake</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">ggml</code> project is built with <a href="https://cmake.org/">CMake</a>, a popular build
+automation tool for cross-platform build script generation<sup id="fnref:3"><a href="#fn:3" class="footnote" rel="footnote" role="doc-noteref">3</a></sup>. That is, we can
+define our build requirements in a <code class="language-plaintext highlighter-rouge">CMakeLists.txt</code> file, and <code class="language-plaintext highlighter-rouge">cmake</code> will
+auto-generate <code class="language-plaintext highlighter-rouge">make</code>-compatible build artifacts that can be used to build and
+run binaries.</p>
+
+<p>To start, let’s create our project with the following directory structure:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>learn_ggml
+├── CMakeLists.txt    # Our CMake build definition
+├── build             # An empty directory, where CMake will write build files to
+├── ggml              # The ggml repository at commit 9a4ac
+└── main.cpp          # Our starter progra, copied from `simple-backend.cpp`
+</code></pre></div></div>
+
+<p>We can write our build definition in <code class="language-plaintext highlighter-rouge">CMakeLists.txt</code> as follows (see comments
+for details):</p>
+
+<div class="language-cmake highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cmake_minimum_required</span><span class="p">(</span>VERSION 3.12<span class="p">)</span>
+<span class="nb">project</span><span class="p">(</span><span class="s2">"learn_ggml"</span><span class="p">)</span>
+
+<span class="c1"># See https://joshtronic.com/2024/01/14/cmake-compile-commands-json/ for more</span>
+<span class="c1"># information on this flag:</span>
+<span class="nb">set</span><span class="p">(</span>CMAKE_EXPORT_COMPILE_COMMANDS ON<span class="p">)</span>
+
+<span class="c1"># Output binaries to `{pwd}/bin`:</span>
+<span class="nb">set</span><span class="p">(</span>CMAKE_RUNTIME_OUTPUT_DIRECTORY <span class="si">${</span><span class="nv">CMAKE_BINARY_DIR</span><span class="si">}</span>/bin<span class="p">)</span>
+
+<span class="c1"># `ggml` is a subdirectory/sub-project with its own CMakeLists.txt:</span>
+<span class="nb">add_subdirectory</span><span class="p">(</span>ggml<span class="p">)</span>
+
+<span class="c1"># `main.cpp` is our executable:</span>
+<span class="nb">add_executable</span><span class="p">(</span>learn_ggml main.cpp<span class="p">)</span>
+
+<span class="c1"># Enable DEBUG mode:</span>
+<span class="nb">set</span><span class="p">(</span>GGML_DEBUG ON<span class="p">)</span>
+<span class="nb">add_definitions</span><span class="p">(</span>-DGGML_DEBUG<span class="p">)</span>
+
+<span class="c1"># Link `learn_ggml` (our executable) against `ggml`, and use</span>
+<span class="c1"># C++20:</span>
+<span class="nb">target_include_directories</span><span class="p">(</span>learn_ggml PUBLIC .<span class="p">)</span>
+<span class="nb">target_compile_features</span><span class="p">(</span>learn_ggml PUBLIC cxx_std_20<span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span>learn_ggml PRIVATE ggml<span class="p">)</span>
+</code></pre></div></div>
+
+<p>All that’s left is to initialize CMake, and build:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Initialize with source directory `.` and build directory `build`</span>
+cmake <span class="nt">-B</span> build <span class="nt">-S</span> <span class="nb">.</span>
+<span class="nb">cd </span>build<span class="p">;</span> cmake <span class="nt">--build</span> <span class="nb">.</span> <span class="nt">-j8</span>
+</code></pre></div></div>
+
+<p>Voilà! All done. We can now run <code class="language-plaintext highlighter-rouge">./build/bin/main</code>, which constructs
+a ggml model, performs two basic tensor operations, and returns the
+result to the user. We’ll dive deeper into the individual components of
+<code class="language-plaintext highlighter-rouge">main.cpp</code> in the subsections below.</p>
+
+<h2 id="part-1-initialization-and-concepts">Part 1: Initialization and Concepts</h2>
+
+<p>Recall that we’ll be following along with the “simple backend” example in the
+<code class="language-plaintext highlighter-rouge">ggml</code> repository: it’s located
+<a href="https://github.com/ggml-org/ggml/blob/master/examples/simple/simple-backend.cpp">here</a>.
+The file implements a very simple computation, computing $Y = AB^T$ for known
+matrices $A$ and $B$, but spans over 200 lines of code due to the level of
+detail at which components must be specified.</p>
+
+<p>In <code class="language-plaintext highlighter-rouge">main</code>, we begin defining our inputs <code class="language-plaintext highlighter-rouge">matrix_A</code> and <code class="language-plaintext highlighter-rouge">matrix_B</code>:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">const</span> <span class="kt">int</span> <span class="n">rows_A</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="n">cols_A</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+
+<span class="kt">float</span> <span class="n">matrix_A</span><span class="p">[</span><span class="n">rows_A</span> <span class="o">*</span> <span class="n">cols_A</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span>
+  <span class="mi">5</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span>
+  <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span>
+  <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span>
+<span class="p">};</span>
+
+<span class="k">const</span> <span class="kt">int</span> <span class="n">rows_B</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">cols_B</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="cm">/* Transpose([
+  10, 9, 5,
+  5, 9, 4
+]) 2 rows, 3 cols */</span>
+<span class="kt">float</span> <span class="n">matrix_B</span><span class="p">[</span><span class="n">rows_B</span> <span class="o">*</span> <span class="n">cols_B</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span>
+  <span class="mi">9</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span>
+  <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>We specify our input data as a one-dimensional <code class="language-plaintext highlighter-rouge">float</code> array, without
+associated dimensions: we will pass dimensions later when we construct
+<code class="language-plaintext highlighter-rouge">ggml_tensor</code> objects from the raw data. Note that we transpose B ahead-of-time
+to align with the subsequent matrix multiplication routines; this requires us
+to be extra cautious when laying out our data order. All <code class="language-plaintext highlighter-rouge">ggml</code> objects are
+allocated on CPU first, and subsequently moved to an alternative backend if
+specified.</p>
+
+<p>We next define a “model”, a struct specified as</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">simple_model</span> <span class="p">{</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">a</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">b</span><span class="p">;</span>
+
+  <span class="c1">// the backend to perform the computation (e.g., CPU, CUDA, METAL)</span>
+  <span class="n">ggml_backend_t</span> <span class="n">backend</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+  <span class="c1">// the backend buffer to storage the data of tensors a and b</span>
+  <span class="n">ggml_backend_buffer_t</span> <span class="n">buffer</span><span class="p">;</span>
+
+  <span class="c1">// the context to define the tensor information (dimensions, size, memory address)</span>
+  <span class="k">struct</span> <span class="n">ggml_context</span> <span class="o">*</span> <span class="n">ctx</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>The model stores pointers to objects that <code class="language-plaintext highlighter-rouge">ggml</code> will manage for our simple
+model (a single matrix multiplication); it’s created to group them for
+convenience. In more advanced settings, one can imagine a model consisting of
+many <em>layers</em>, each storing their own set of tensors (with their own buffers),
+but all sharing a single context.</p>
+
+<p>The model groups two distinct types of information in one struct:</p>
+<ul>
+  <li><strong>Logical.</strong> Elements that help define the computational graph: <code class="language-plaintext highlighter-rouge">ggml_tensor</code>,
+<code class="language-plaintext highlighter-rouge">ggml_context</code>. This information is used to define and allocate memory for
+the objects that participate in the model’s forward pass.</li>
+  <li><strong>Physical.</strong> Elements defining the physical storage of logical components:
+<code class="language-plaintext highlighter-rouge">ggml_backend</code>, <code class="language-plaintext highlighter-rouge">ggml_buffer</code>. This information specifies the allocation of
+logical elements on physical hardware, and defines the (accelerator) device
+type, memory access mechanisms, and more.</li>
+</ul>
+
+<h3 id="logical-information-the-tensor-and-context">Logical Information: the Tensor and Context</h3>
+
+<p>We’ll start with the logical layout of objects (tensors) and the computational
+graph composed of their operations.</p>
+
+<h4 id="the-tensor-object-ggml_tensor">The tensor object: <code class="language-plaintext highlighter-rouge">ggml_tensor</code></h4>
+
+<p>A tensor struct defines properties of a tensor, which can either be a leaf (no
+dependencies; constructed from input data) or a node (dependencies stored in <code class="language-plaintext highlighter-rouge">src</code>;
+constructed from previously constructed <code class="language-plaintext highlighter-rouge">ggml_tensor</code> objects) in a computational
+graph. Here’s the struct in its entirety:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="p">{</span>
+  <span class="c1">// Data type (e.g. FP32, FP16)</span>
+  <span class="k">enum</span> <span class="n">ggml_type</span> <span class="n">type</span><span class="p">;</span>
+
+  <span class="c1">// Metadata for tensors stored in non-CPU backends:</span>
+  <span class="k">struct</span> <span class="n">ggml_backend_buffer</span> <span class="o">*</span> <span class="n">buffer</span><span class="p">;</span>
+
+  <span class="kt">int64_t</span> <span class="n">ne</span><span class="p">[</span><span class="n">GGML_MAX_DIMS</span><span class="p">];</span> <span class="c1">// number of elements</span>
+  <span class="kt">size_t</span>  <span class="n">nb</span><span class="p">[</span><span class="n">GGML_MAX_DIMS</span><span class="p">];</span> <span class="c1">// stride in bytes</span>
+
+  <span class="c1">// If a tensor corresponsd to a leaf in the computational</span>
+  <span class="c1">// graph, op is GGML_OP_NONE. Otherwise, corresponds to</span>
+  <span class="c1">// the operation that produced this node:</span>
+  <span class="k">enum</span> <span class="n">ggml_op</span> <span class="n">op</span><span class="p">;</span>
+
+  <span class="c1">// op params - allocated as int32_t for alignment</span>
+  <span class="kt">int32_t</span> <span class="n">op_params</span><span class="p">[</span><span class="n">GGML_MAX_OP_PARAMS</span> <span class="o">/</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">int32_t</span><span class="p">)];</span>
+
+  <span class="kt">int32_t</span> <span class="n">flags</span><span class="p">;</span>
+
+  <span class="c1">// Source nodes or leaves that correspond to this</span>
+  <span class="c1">// tensor:</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">src</span><span class="p">[</span><span class="n">GGML_MAX_SRC</span><span class="p">];</span>
+
+  <span class="c1">// For tensors that are views of other tensors, the</span>
+  <span class="c1">// source tensor and offset into that source tensor:</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">view_src</span><span class="p">;</span>
+  <span class="kt">size_t</span>               <span class="n">view_offs</span><span class="p">;</span>
+
+  <span class="c1">// A pointer to the tensor's data.</span>
+  <span class="c1">// TODO(manan): For tensors allocated on non-CPU backends,</span>
+  <span class="c1">// what happens?</span>
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">data</span><span class="p">;</span>
+
+  <span class="c1">// The name of the tensor in the computational graph,</span>
+  <span class="c1">// used for printing and searching:</span>
+  <span class="kt">char</span> <span class="n">name</span><span class="p">[</span><span class="n">GGML_MAX_NAME</span><span class="p">];</span>
+
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">extra</span><span class="p">;</span> <span class="c1">// extra things e.g. for ggml-cuda.cu</span>
+
+  <span class="c1">// Alignment:</span>
+  <span class="kt">char</span> <span class="n">padding</span><span class="p">[</span><span class="mi">8</span><span class="p">];</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>Importantly, ggml tensors support full-precision types, half-precision types,
+and many quantized types for low-memory, low-latency inference (see the
+<code class="language-plaintext highlighter-rouge">ggml_type</code> enum for more information). Like <code class="language-plaintext highlighter-rouge">numpy</code> and other similar
+libraries, tensors are not assumed to be contiguous and instead have
+shape/stride metadata stored with them; this is useful for operations like
+transposition and permutation. This is also a place where ggml zigs while other
+libraries zag: tensors are stored with their lowest dimension first, while
+other libraries store the lowest dimension last. Concretely, this means that a
+2x3x4 tensor will have <code class="language-plaintext highlighter-rouge">ne = {4, 3, 2}</code>.</p>
+
+<p>We’ll get to initializing our tensors from the raw (flattened) data in
+<code class="language-plaintext highlighter-rouge">matrix_A</code> and <code class="language-plaintext highlighter-rouge">matrix_B</code> soon. For now, let’s turn to the next important
+logical concept: the ggml context.</p>
+
+<h4 id="the-memory-manager-ggml_context">The memory manager: <code class="language-plaintext highlighter-rouge">ggml_context</code></h4>
+
+<p>The ggml context manages the memory of all tensors, operations, and other
+metadata necessary to execute the ggml computational graph. In particular, it
+defines a linked list of <code class="language-plaintext highlighter-rouge">ggml_object</code> elements (similar to simple memory
+allocators), and knows its own size, buffer type, and number of objects.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_context</span> <span class="p">{</span>
+    <span class="kt">size_t</span> <span class="n">mem_size</span><span class="p">;</span>
+    <span class="kt">void</span> <span class="o">*</span> <span class="n">mem_buffer</span><span class="p">;</span>
+    <span class="n">bool</span>   <span class="n">mem_buffer_owned</span><span class="p">;</span>
+    <span class="n">bool</span>   <span class="n">no_alloc</span><span class="p">;</span>
+
+    <span class="kt">int</span>    <span class="n">n_objects</span><span class="p">;</span>
+
+    <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="n">objects_begin</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="n">objects_end</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>Each <code class="language-plaintext highlighter-rouge">ggml_object</code> is defined as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_object</span> <span class="p">{</span>
+    <span class="kt">size_t</span> <span class="n">offs</span><span class="p">;</span>
+    <span class="kt">size_t</span> <span class="n">size</span><span class="p">;</span>
+    <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="n">next</span><span class="p">;</span>
+    <span class="c1">// one of TENSOR, GRAPH, or WORK_BUFFER</span>
+    <span class="k">enum</span> <span class="n">ggml_object_type</span> <span class="n">type</span><span class="p">;</span>
+    <span class="kt">char</span> <span class="n">padding</span><span class="p">[</span><span class="mi">4</span><span class="p">];</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>and manages <code class="language-plaintext highlighter-rouge">size</code> bytes of memory within <code class="language-plaintext highlighter-rouge">ggml_context</code>’s memory pool,
+namely <code class="language-plaintext highlighter-rouge">mem_buffer</code>. We can understand buffer management better by inspecting
+the new object creation routine, which will resurface when we consider tensor
+creation. The method is as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="nf">ggml_new_object</span><span class="p">(</span>
+  <span class="k">struct</span> <span class="n">ggml_context</span> <span class="o">*</span> <span class="n">ctx</span><span class="p">,</span> <span class="k">enum</span> <span class="n">ggml_object_type</span> <span class="n">type</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span> <span class="p">{</span>
+
+  <span class="cm">/* Insert objects at the end of the context's memory pool: find the
+     offset in the pool that corresponds to this, and align. */</span>
+  <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="n">obj_cur</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">-&gt;</span><span class="n">objects_end</span><span class="p">;</span>
+  <span class="k">const</span> <span class="kt">size_t</span> <span class="n">cur_offs</span> <span class="o">=</span> <span class="n">obj_cur</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="o">?</span> <span class="mi">0</span> <span class="o">:</span> <span class="n">obj_cur</span><span class="o">-&gt;</span><span class="n">offs</span><span class="p">;</span>
+  <span class="k">const</span> <span class="kt">size_t</span> <span class="n">cur_size</span> <span class="o">=</span> <span class="n">obj_cur</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="o">?</span> <span class="mi">0</span> <span class="o">:</span> <span class="n">obj_cur</span><span class="o">-&gt;</span><span class="n">size</span><span class="p">;</span>
+  <span class="k">const</span> <span class="kt">size_t</span> <span class="n">cur_end</span>  <span class="o">=</span> <span class="n">cur_offs</span> <span class="o">+</span> <span class="n">cur_size</span><span class="p">;</span>
+
+  <span class="c1">// align to GGML_MEM_ALIGN</span>
+  <span class="kt">size_t</span> <span class="n">size_needed</span> <span class="o">=</span> <span class="n">GGML_PAD</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">GGML_MEM_ALIGN</span><span class="p">);</span>
+
+  <span class="c1">// Error handling elided...</span>
+
+  <span class="cm">/* Construct the new ggml object within the context's memory buffer, and
+     associate it with the physical object it is responsible for (via offset and
+     size). The object it is responsible for will be placed in the buffer right
+     after itself (hence why .offs = cur_end + GGML_OBJECT_SIZE) */</span>
+  <span class="kt">char</span> <span class="o">*</span> <span class="k">const</span> <span class="n">mem_buffer</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">-&gt;</span><span class="n">mem_buffer</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="k">const</span> <span class="n">obj_new</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span><span class="p">)(</span><span class="n">mem_buffer</span> <span class="o">+</span> <span class="n">cur_end</span><span class="p">);</span>
+  <span class="o">*</span><span class="n">obj_new</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">ggml_object</span><span class="p">)</span> <span class="p">{</span>
+    <span class="p">.</span><span class="n">offs</span> <span class="o">=</span> <span class="n">cur_end</span> <span class="o">+</span> <span class="n">GGML_OBJECT_SIZE</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">size_needed</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">next</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">,</span>
+    <span class="p">.</span><span class="n">type</span> <span class="o">=</span> <span class="n">type</span><span class="p">,</span>
+  <span class="p">};</span>
+
+  <span class="cm">/* Update the linked list of ggml objects */</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">obj_cur</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+      <span class="n">obj_cur</span><span class="o">-&gt;</span><span class="n">next</span> <span class="o">=</span> <span class="n">obj_new</span><span class="p">;</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+      <span class="c1">// this is the first object in this context</span>
+      <span class="n">ctx</span><span class="o">-&gt;</span><span class="n">objects_begin</span> <span class="o">=</span> <span class="n">obj_new</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="n">ctx</span><span class="o">-&gt;</span><span class="n">objects_end</span> <span class="o">=</span> <span class="n">obj_new</span><span class="p">;</span>
+  <span class="k">return</span> <span class="n">obj_new</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>We now have a grasp on two core ggml concepts: <code class="language-plaintext highlighter-rouge">ggml_tensor</code>s manage the data
+and dimensions of objects that participate in the computational graph. Each
+tensor’s memory allocation is managed by a linked list of <code class="language-plaintext highlighter-rouge">ggml_object</code>s, which
+keep their metadata and memory allocated within the <code class="language-plaintext highlighter-rouge">ggml_context</code>.</p>
+
+<p>But where is the allocation actually performed, and who owns the memory of the
+<code class="language-plaintext highlighter-rouge">ggml_context</code>’s memory buffer? This question leads us to the next set of
+concepts related to the physical layout of objects across device memory,
+whether that be CPU, GPU, or something else.</p>
+
+<h3 id="physical-information-devices-and-the-compute-backend">Physical Information: Devices and the Compute Backend</h3>
+
+<p>An important consideration in ggml’s design is the support of various backends;
+as a result, a unified interface for defining and registering devices as well
+as accessing their memory banks is paramount. The interfaces discussed below
+are abstracted such that this is possible in a hardware-agnostic manner.</p>
+
+<h4 id="the-compute-backend-interface-ggml_backend">The compute backend interface: <code class="language-plaintext highlighter-rouge">ggml_backend</code></h4>
+
+<p><code class="language-plaintext highlighter-rouge">simple_model</code> defines a member of type <code class="language-plaintext highlighter-rouge">ggml_backend_t backend</code>, where
+<code class="language-plaintext highlighter-rouge">ggml_backend_t</code> represents a pointer to a <code class="language-plaintext highlighter-rouge">ggml_backend</code> object. Backends are
+the core interface that ggml uses for exposing compute devices and their
+associated memory (eg. CPU DRAM, CUDA HBM, etc.). Every tensor is allocated on
+a backend; the default backend is <code class="language-plaintext highlighter-rouge">NULL</code>, which allocates on CPU.</p>
+
+<p>A ggml backend is defined as follows:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_backend</span> <span class="p">{</span>
+  <span class="c1">// Globally unique backend ID:</span>
+  <span class="n">ggml_guid_t</span> <span class="n">guid</span><span class="p">;</span>
+  
+  <span class="c1">// Interface to set/get/copy tensors, record events, etc.</span>
+  <span class="c1">// on this backend:</span>
+  <span class="k">struct</span> <span class="n">ggml_backend_i</span> <span class="n">iface</span><span class="p">;</span>
+  
+  <span class="c1">// The backend device (e.g. CPU, CUDA0), which contains:</span>
+  <span class="c1">//  - its own device interface (to get device properties, memory,</span>
+  <span class="c1">//    supported operations, etc.)</span>
+  <span class="c1">//  - a backend registry, which contains its own registry interface</span>
+  <span class="c1">//    that supports methods to enumerate available devices</span>
+  <span class="n">ggml_backend_dev_t</span> <span class="n">device</span><span class="p">;</span>
+
+  <span class="c1">// Other auxiliary items, per-backend:</span>
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">context</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>The operations a backend can perform are grouped under its interface, which
+is specified as</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Some elements elided:</span>
+<span class="k">struct</span> <span class="n">ggml_backend_i</span> <span class="p">{</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="p">(</span><span class="o">*</span><span class="n">get_name</span><span class="p">)(</span><span class="n">ggml_backend_t</span> <span class="n">backend</span><span class="p">);</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">free</span><span class="p">)(</span><span class="n">ggml_backend_t</span> <span class="n">backend</span><span class="p">);</span>
+
+  <span class="c1">// Asynchronous tensor data access. Parameters elided, roughly take the</span>
+  <span class="c1">// form backend, tensor, data, offset, size:</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">set_tensor_async</span><span class="p">)(...)</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">get_tensor_async</span><span class="p">)(...);</span>
+  <span class="n">bool</span> <span class="p">(</span><span class="o">*</span><span class="n">cpy_tensor_async</span><span class="p">)(...);</span>
+
+  <span class="c1">// Complete all pending operations (required if the backend supports async operations):</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">synchronize</span><span class="p">)(</span><span class="n">ggml_backend_t</span> <span class="n">backend</span><span class="p">);</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p><strong>An implementation: CUDA.</strong> While this provides us with high-level intuition about the specifications of a
+backend, it’s often helpful to look at a practical example. Let’s take the CUDA
+backend, which is initialized per device<sup id="fnref:4"><a href="#fn:4" class="footnote" rel="footnote" role="doc-noteref">4</a></sup>. It’s constructed as follows:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ggml_backend_t</span> <span class="nf">ggml_backend_cuda_init</span><span class="p">(</span><span class="kt">int</span> <span class="n">device</span><span class="p">)</span> <span class="p">{</span>
+  <span class="c1">// Error handling elided...</span>
+  <span class="n">ggml_backend_cuda_context</span> <span class="o">*</span> <span class="n">ctx</span> <span class="o">=</span> <span class="n">new</span> <span class="n">ggml_backend_cuda_context</span><span class="p">(</span><span class="n">device</span><span class="p">);</span>
+  <span class="n">ggml_backend_t</span> <span class="n">cuda_backend</span> <span class="o">=</span> <span class="n">new</span> <span class="n">ggml_backend</span> <span class="p">{</span>
+    <span class="cm">/* .guid      = */</span> <span class="n">ggml_backend_cuda_guid</span><span class="p">(),</span>
+    <span class="cm">/* .interface = */</span> <span class="n">ggml_backend_cuda_interface</span><span class="p">,</span>
+    <span class="cm">/* .device    = */</span> <span class="n">ggml_backend_reg_dev_get</span><span class="p">(</span><span class="n">ggml_backend_cuda_reg</span><span class="p">(),</span> <span class="n">device</span><span class="p">),</span>
+    <span class="cm">/* .context   = */</span> <span class="n">ctx</span><span class="p">,</span>
+  <span class="p">};</span>
+  <span class="k">return</span> <span class="n">cuda_backend</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>The GUID is a 16-byte globally unique ID defined per backend. The backend
+interace is defined as</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// NULL elements elided:</span>
+<span class="k">static</span> <span class="k">const</span> <span class="n">ggml_backend_i</span> <span class="n">ggml_backend_cuda_interface</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="cm">/* .get_name                = */</span> <span class="n">ggml_backend_cuda_get_name</span><span class="p">,</span>
+  <span class="cm">/* .free                    = */</span> <span class="n">ggml_backend_cuda_free</span><span class="p">,</span>
+  <span class="cm">/* .set_tensor_async        = */</span> <span class="n">ggml_backend_cuda_set_tensor_async</span><span class="p">,</span>
+  <span class="cm">/* .get_tensor_async        = */</span> <span class="n">ggml_backend_cuda_get_tensor_async</span><span class="p">,</span>
+  <span class="cm">/* .cpy_tensor_async        = */</span> <span class="n">ggml_backend_cuda_cpy_tensor_async</span><span class="p">,</span>
+  <span class="cm">/* .synchronize             = */</span> <span class="n">ggml_backend_cuda_synchronize</span><span class="p">,</span>
+  <span class="cm">/* .graph_compute           = */</span> <span class="n">ggml_backend_cuda_graph_compute</span><span class="p">,</span>
+  <span class="cm">/* .event_record            = */</span> <span class="n">ggml_backend_cuda_event_record</span><span class="p">,</span>
+  <span class="cm">/* .event_wait              = */</span> <span class="n">ggml_backend_cuda_event_wait</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>The implementation of <code class="language-plaintext highlighter-rouge">set_tensor_async</code> does exactly what we would expect: it 
+copies the tensor data from host (CPU) to device (GPU), leveraging the current
+context’s CUDA stream.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="kt">void</span> <span class="nf">ggml_backend_cuda_set_tensor_async</span><span class="p">(</span>
+  <span class="n">ggml_backend_t</span> <span class="n">backend</span><span class="p">,</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">tensor</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span> <span class="n">data</span><span class="p">,</span>
+  <span class="kt">size_t</span> <span class="n">offset</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">ggml_backend_cuda_context</span> <span class="o">*</span> <span class="n">cuda_ctx</span> <span class="o">=</span> <span class="p">(</span>
+      <span class="p">(</span><span class="n">ggml_backend_cuda_context</span> <span class="o">*</span><span class="p">)</span><span class="n">backend</span><span class="o">-&gt;</span><span class="n">context</span><span class="p">);</span>
+    <span class="c1">// Error handling elided...</span>
+    <span class="n">CUDA_CHECK</span><span class="p">(</span><span class="n">cudaMemcpyAsync</span><span class="p">((</span><span class="kt">char</span> <span class="o">*</span><span class="p">)</span><span class="n">tensor</span><span class="o">-&gt;</span><span class="n">data</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span>
+               <span class="n">size</span><span class="p">,</span> <span class="n">cudaMemcpyHostToDevice</span><span class="p">,</span> <span class="n">cuda_ctx</span><span class="o">-&gt;</span><span class="n">stream</span><span class="p">()));</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Let’s next turn our attention to the <code class="language-plaintext highlighter-rouge">.device</code> property, which defines
+the physical device (think compute accelerator) that a backend is constructed on.</p>
+
+<h4 id="the-device-interface-ggml_backend_device">The device interface: <code class="language-plaintext highlighter-rouge">ggml_backend_device</code></h4>
+
+<p>In <code class="language-plaintext highlighter-rouge">ggml_backend</code>, <code class="language-plaintext highlighter-rouge">device</code> is a pointer to a <code class="language-plaintext highlighter-rouge">ggml_backend_device</code> struct,
+which has the following definition:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_backend_device</span> <span class="p">{</span>
+  <span class="k">struct</span> <span class="n">ggml_backend_device_i</span> <span class="n">iface</span><span class="p">;</span>
+  <span class="n">ggml_backend_reg_t</span> <span class="n">reg</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">context</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>In keeping with the same semantics as the backend, a device also has an
+interface, which defines the common operations a device must support.
+These operations are as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_backend_device_i</span> <span class="p">{</span>
+  <span class="c1">// Some elements elided for simplicity...</span>
+
+  <span class="c1">// device name: short identifier, such as "CPU" or "CUDA0"</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="p">(</span><span class="o">*</span><span class="n">get_name</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">);</span>
+
+  <span class="c1">// device memory in bytes</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">get_memory</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span> <span class="n">free</span><span class="p">,</span> <span class="kt">size_t</span> <span class="o">*</span> <span class="n">total</span><span class="p">);</span>
+
+  <span class="c1">// device type</span>
+  <span class="k">enum</span> <span class="n">ggml_backend_dev_type</span> <span class="p">(</span><span class="o">*</span><span class="n">get_type</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">);</span>
+
+  <span class="c1">// device properties</span>
+  <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">get_props</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">,</span> <span class="k">struct</span> <span class="n">ggml_backend_dev_props</span> <span class="o">*</span> <span class="n">props</span><span class="p">);</span>
+
+  <span class="c1">// backend (stream) initialization</span>
+  <span class="n">ggml_backend_t</span> <span class="p">(</span><span class="o">*</span><span class="n">init_backend</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="n">params</span><span class="p">);</span>
+
+  <span class="c1">// check if the backend can compute an operation</span>
+  <span class="n">bool</span> <span class="p">(</span><span class="o">*</span><span class="n">supports_op</span><span class="p">)(</span><span class="n">ggml_backend_dev_t</span> <span class="n">dev</span><span class="p">,</span> <span class="k">const</span> <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">op</span><span class="p">);</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>So far, pretty straightforward: each device (CPU, CUDA0, CUDA1, etc.) all define
+a unified way to access their available memory, properties, construct streams,
+and perform other buffer-related operations.</p>
+
+<p>A device is also associated with a <em>registry</em> of all available devices of
+its type. The registry is a simple struct, which supports fetching the name
+of the device type and enumerating devices as exposed via its interface.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_backend_reg</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">api_version</span><span class="p">;</span> <span class="c1">// initialize to GGML_BACKEND_API_VERSION</span>
+  <span class="k">struct</span> <span class="n">ggml_backend_reg_i</span> <span class="n">iface</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="o">*</span> <span class="n">context</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="k">struct</span> <span class="n">ggml_backend_reg_i</span> <span class="p">{</span>
+  <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="p">(</span><span class="o">*</span><span class="n">get_name</span><span class="p">)(</span><span class="n">ggml_backend_reg_t</span> <span class="n">reg</span><span class="p">);</span>
+  <span class="kt">size_t</span>             <span class="p">(</span><span class="o">*</span><span class="n">get_device_count</span><span class="p">)(</span><span class="n">ggml_backend_reg_t</span> <span class="n">reg</span><span class="p">);</span>
+  <span class="n">ggml_backend_dev_t</span> <span class="p">(</span><span class="o">*</span><span class="n">get_device</span><span class="p">)(</span><span class="n">ggml_backend_reg_t</span> <span class="n">reg</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">index</span><span class="p">);</span>
+  <span class="c1">// One method elided for simplicity...</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p><strong>CUDA, continued.</strong> Recall that the initialization of the CUDA backend is done
+as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="cm">/* .device    = */</span> <span class="n">ggml_backend_reg_dev_get</span><span class="p">(</span><span class="n">ggml_backend_cuda_reg</span><span class="p">(),</span> <span class="n">device</span><span class="p">),</span>
+</code></pre></div></div>
+<p>In particular, the CUDA registry is fetched (which contains information about all
+available CUDA devices on the node), and the device is fetched from this registry
+via the registry interface’s <code class="language-plaintext highlighter-rouge">get_device</code> method:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ggml_backend_dev_t</span> <span class="nf">ggml_backend_reg_dev_get</span><span class="p">(</span><span class="n">ggml_backend_reg_t</span> <span class="n">reg</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">index</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="n">reg</span><span class="o">-&gt;</span><span class="n">iface</span><span class="p">.</span><span class="n">get_device</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span> <span class="n">index</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>This returns a device, associated with the CUDA registry, that is associated with the
+<code class="language-plaintext highlighter-rouge">ggml_backend</code> object within <code class="language-plaintext highlighter-rouge">simple_model</code>.</p>
+
+<p>Phew–that was a lot. To recap, a <code class="language-plaintext highlighter-rouge">ggml_backend</code> object defines a single backend device,
+and and interface to allocate tensors, listen for events, etc. on this device. Devices
+themselves provide an interface to expose their (hardware) properties, and are grouped
+under registry entries.</p>
+
+<h3 id="putting-it-all-together">Putting it All Together</h3>
+
+<p>After initializing our <code class="language-plaintext highlighter-rouge">simple_model</code> object, our simple example initializes its
+elements as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="n">simple_model</span> <span class="n">model</span><span class="p">;</span>
+  <span class="n">load_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">matrix_A</span><span class="p">,</span> <span class="n">matrix_B</span><span class="p">,</span> <span class="n">rows_A</span><span class="p">,</span> <span class="n">cols_A</span><span class="p">,</span> <span class="n">rows_B</span><span class="p">,</span> <span class="n">cols_B</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>The call to <code class="language-plaintext highlighter-rouge">load_model</code> (with some unncessary operations eliminated) performs
+the following set of operations:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Initialize the backend using CUDA device 0:</span>
+<span class="n">model</span><span class="p">.</span><span class="n">backend</span> <span class="o">=</span> <span class="n">ggml_backend_cuda_init</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="kt">int</span> <span class="n">num_tensors</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="k">struct</span> <span class="n">ggml_init_params</span> <span class="n">params</span> <span class="p">{</span>
+    <span class="cm">/*.mem_size   =*/</span> <span class="n">ggml_tensor_overhead</span><span class="p">()</span> <span class="o">*</span> <span class="n">num_tensors</span><span class="p">,</span>
+    <span class="cm">/*.mem_buffer =*/</span> <span class="nb">NULL</span><span class="p">,</span>
+    <span class="cm">/*.no_alloc   =*/</span> <span class="nb">true</span><span class="p">,</span>  <span class="c1">// since we are using buffers</span>
+<span class="p">};</span>
+
+<span class="cm">/* Initializes ggml, which (among other things) initializes a fp32-&gt;fp16
+   conversion table, sets up logging, and constructs the `ggml_context`
+   object. Note that mem_buffer is NULL above, which results in the
+   context being allocated on the default buffer (CPU), but no_alloc
+   is true, which results in the context not allocating objects
+   within its buffer (they are next allocated on GPU directly). */</span>
+<span class="n">model</span><span class="p">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ggml_init</span><span class="p">(</span><span class="n">params</span><span class="p">);</span>
+
+<span class="cm">/* Create new tensors within the ggml context: internally, this calls
+   ggml_new_object with the appropriate object type and size: */</span>
+<span class="n">model</span><span class="p">.</span><span class="n">a</span> <span class="o">=</span> <span class="n">ggml_new_tensor_2d</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">ctx</span><span class="p">,</span> <span class="n">GGML_TYPE_F32</span><span class="p">,</span> <span class="n">cols_A</span><span class="p">,</span> <span class="n">rows_A</span><span class="p">);</span>
+<span class="n">model</span><span class="p">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">ggml_new_tensor_2d</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">ctx</span><span class="p">,</span> <span class="n">GGML_TYPE_F32</span><span class="p">,</span> <span class="n">cols_B</span><span class="p">,</span> <span class="n">rows_B</span><span class="p">);</span>
+
+<span class="cm">/* Allocate the tensor data directly on the model backend (GPU 0).
+   Tensor allocation on a backend is relatively involved, ultimately
+   calling the ggml_backend's init_tensor interface. In CUDA, this
+   performs a cudaMemset operation. */</span>
+<span class="n">model</span><span class="p">.</span><span class="n">buffer</span> <span class="o">=</span> <span class="n">ggml_backend_alloc_ctx_tensors</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">ctx</span><span class="p">,</span> <span class="n">model</span><span class="p">.</span><span class="n">backend</span><span class="p">);</span>
+<span class="n">ggml_backend_tensor_set</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ggml_nbytes</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">a</span><span class="p">));</span>
+<span class="n">ggml_backend_tensor_set</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">b</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ggml_nbytes</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">b</span><span class="p">));</span>
+</code></pre></div></div>
+<p>Importantly, <code class="language-plaintext highlighter-rouge">load_model</code> constructs the <code class="language-plaintext highlighter-rouge">ggml_context</code> object on the
+default device (CPU) and constructs a <code class="language-plaintext highlighter-rouge">ggml_object</code> for each
+tensor, but allocates the tensor data in the model buffer (GPU 0).</p>
+
+<h2 id="part-2-constructing-a-computational-graph">Part 2: Constructing a Computational Graph</h2>
+
+<p>So far, we’ve:</p>
+<ul>
+  <li>Constructed a <code class="language-plaintext highlighter-rouge">ggml_backend</code> object referencing device CUDA 0</li>
+  <li>Constructed a <code class="language-plaintext highlighter-rouge">ggml_context</code> object (on CPU), defining a linked
+list of <code class="language-plaintext highlighter-rouge">ggml_boject</code>s that manage the memory of our constructed
+tensors</li>
+  <li>Constructed our tensors on CUDA device 0, by copying from CPU
+to GPU.</li>
+</ul>
+
+<p>Now that initialization of our input data and compute backend is complete, we
+next construct a computational graph (type <code class="language-plaintext highlighter-rouge">ggml_cgraph</code>), which defines the
+set of operations we wish to perform on our input tensors. The computational
+graph is statically constructed and records these operations, and allocates
+memory for temporary tensors constructed within the computation of the
+computational graph so this memory is not allocated/deallocated on the fly
+during the forward pass.</p>
+
+<h3 id="setting-up">Setting Up</h3>
+
+<p>Our example begins by allocating memory for the computational graph as follows:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ggml_gallocr_t</span> <span class="n">allocr</span> <span class="o">=</span> <span class="p">(</span>
+  <span class="n">ggml_gallocr_new</span><span class="p">(</span><span class="n">ggml_backend_get_default_buffer_type</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">backend</span><span class="p">)));</span>
+</code></pre></div></div>
+<p><code class="language-plaintext highlighter-rouge">allocr</code> is a pointer to a <code class="language-plaintext highlighter-rouge">ggml_gallocr</code> object… we’ll make headway into
+understanding this struct as we parse the methods used to build a graph; for
+now, it’s worth noting that the <code class="language-plaintext highlighter-rouge">ggml_gallocr_new</code> method allocates these
+members <em>on the (CPU) stack</em> (<em>e.g.</em> with <code class="language-plaintext highlighter-rouge">calloc</code>).</p>
+
+<p>After initializing <code class="language-plaintext highlighter-rouge">allocr</code>, the example constructs a <code class="language-plaintext highlighter-rouge">ggml_cgraph</code> twice: once
+to define a memory estimation for the graph allocator, and the second to
+actually allocate the current graph. This optimization is typically useful for
+models that support dynamic batch sizes, with the desire of allocating the
+worst-case graph once (<em>e.g.</em> with the maximum batch size) and avoiding
+re-allocations when forwarding with different inputs. In our case (for a static
+matmul of two fixed-dimension inputs), it’s unnecessary.</p>
+
+<p>We can thus consolidate computational graph (<code class="language-plaintext highlighter-rouge">ggml_cgraph</code>) construction into
+the following two calls:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_cgraph</span> <span class="o">*</span> <span class="n">gf</span> <span class="o">=</span> <span class="n">build_graph</span><span class="p">(</span><span class="n">model</span><span class="p">);</span>
+<span class="n">ggml_gallocr_alloc_graph</span><span class="p">(</span><span class="n">allocr</span><span class="p">,</span> <span class="n">gf</span><span class="p">);</span>
+</code></pre></div></div>
+<p>Put simply, we first build a computational graph on top of the input tensors in
+our <code class="language-plaintext highlighter-rouge">model</code>, and we next allocate the tensors in this graph for use in our
+model forward pass; doing so results in <strong>no dynamic memory allocations at
+runtime</strong>, one of the library’s core promises.</p>
+
+<p>To build our computational graph, <code class="language-plaintext highlighter-rouge">build_graph</code> performs the following operations:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/* Allocate buf_size bytes on CPU DRAM for the graph */</span>
+<span class="k">static</span> <span class="kt">size_t</span> <span class="n">buf_size</span> <span class="o">=</span> <span class="n">ggml_tensor_overhead</span><span class="p">()</span><span class="o">*</span><span class="n">GGML_DEFAULT_GRAPH_SIZE</span> <span class="o">+</span> <span class="n">ggml_graph_overhead</span><span class="p">();</span>
+<span class="k">static</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span> <span class="n">buf</span><span class="p">(</span><span class="n">buf_size</span><span class="p">);</span>
+
+<span class="k">struct</span> <span class="n">ggml_init_params</span> <span class="n">params0</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="cm">/*.mem_size   =*/</span> <span class="n">buf_size</span><span class="p">,</span>
+    <span class="cm">/*.mem_buffer =*/</span> <span class="n">buf</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span>
+
+    <span class="c1">// the tensors will be allocated later, in</span>
+    <span class="c1">// device memory, by ggml_allocr_alloc_graph()</span>
+    <span class="cm">/*.no_alloc   =*/</span> <span class="nb">true</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="cm">/* Create a temporary ggml context to build the graph,
+   cosntruct the graph by performing operations on the
+   input tensors, and recursively visit the parents of
+   the final outpute tensor (result) to build gf */</span>
+<span class="k">struct</span> <span class="n">ggml_context</span> <span class="o">*</span> <span class="n">ctx0</span> <span class="o">=</span> <span class="n">ggml_init</span><span class="p">(</span><span class="n">params0</span><span class="p">);</span>
+<span class="k">struct</span> <span class="n">ggml_cgraph</span>  <span class="o">*</span> <span class="n">gf</span> <span class="o">=</span> <span class="n">ggml_new_graph</span><span class="p">(</span><span class="n">ctx0</span><span class="p">);</span>
+
+<span class="c1">// result = a*b^T</span>
+<span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">ggml_mul_mat</span><span class="p">(</span><span class="n">ctx0</span><span class="p">,</span> <span class="n">model</span><span class="p">.</span><span class="n">a</span><span class="p">,</span> <span class="n">model</span><span class="p">.</span><span class="n">b</span><span class="p">);</span>
+
+<span class="c1">// build operations nodes</span>
+<span class="n">ggml_build_forward_expand</span><span class="p">(</span><span class="n">gf</span><span class="p">,</span> <span class="n">result</span><span class="p">);</span>
+
+<span class="cm">/* Cleanup */</span>
+<span class="n">ggml_free</span><span class="p">(</span><span class="n">ctx0</span><span class="p">);</span>
+<span class="k">return</span> <span class="n">gf</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>We first allocate enough memory to hold <code class="language-plaintext highlighter-rouge">GGML_DEFAULT_GRAPH_SIZE</code> tensors on
+CPU; this memory is static within the <code class="language-plaintext highlighter-rouge">build_graph</code> method, so it is allocated
+once and persists for the lifetime of the program. We next construct a <em>temporary</em>
+context (<code class="language-plaintext highlighter-rouge">ctx0</code>) and buid a new graph atop it; note that while the context
+itself will be freed at the end of <code class="language-plaintext highlighter-rouge">build_graph</code> (as the computational graph
+itself is allocated in <code class="language-plaintext highlighter-rouge">buf</code>), the <code class="language-plaintext highlighter-rouge">ggml_cgraph</code> object itself will persist.</p>
+
+<h3 id="building-the-computational-graph-ggml_cgraph">Building the computational graph: <code class="language-plaintext highlighter-rouge">ggml_cgraph</code></h3>
+
+<p>Let’s now step into <code class="language-plaintext highlighter-rouge">ggml_new_graph(ctx0)</code>, to see what makes up a <code class="language-plaintext highlighter-rouge">ggml_cgraph</code>.
+For reference, the <code class="language-plaintext highlighter-rouge">ggml_cgraph</code> struct has the following definition:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_cgraph</span> <span class="p">{</span>
+  <span class="kt">int</span> <span class="n">size</span><span class="p">;</span>    <span class="c1">// maximum number of nodes/leafs/grads/grad_accs</span>
+  <span class="kt">int</span> <span class="n">n_nodes</span><span class="p">;</span> <span class="c1">// number of nodes currently in use</span>
+  <span class="kt">int</span> <span class="n">n_leafs</span><span class="p">;</span> <span class="c1">// number of leafs currently in use</span>
+
+  <span class="c1">// tensors with data that can change if the graph is evaluated</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">**</span> <span class="n">nodes</span><span class="p">;</span>
+  <span class="c1">// the outputs of these tensors are the gradients of the nodes</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">**</span> <span class="n">grads</span><span class="p">;</span>
+  <span class="c1">// accumulators for node gradients</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">**</span> <span class="n">grad_accs</span><span class="p">;</span>
+  <span class="c1">// tensors with constant data</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">**</span> <span class="n">leafs</span><span class="p">;</span>
+
+  <span class="k">struct</span> <span class="n">ggml_hash_set</span> <span class="n">visited_hash_set</span><span class="p">;</span>
+  <span class="k">enum</span> <span class="n">ggml_cgraph_eval_order</span> <span class="n">order</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>Constructing a new graph follows multiple steps. We begin by computing the number
+of bytes that the graph object requires, and allocating a new object within <code class="language-plaintext highlighter-rouge">ctx0</code>
+on <code class="language-plaintext highlighter-rouge">buf</code> of this size.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Fetch the size of the graph; note here that size is GGML_DEFAULT_GRAPH_SIZE,</span>
+<span class="c1">// or 2048:</span>
+<span class="k">const</span> <span class="kt">size_t</span> <span class="n">obj_size</span> <span class="o">=</span> <span class="n">ggml_graph_nbytes</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">grads</span><span class="p">);</span>
+<span class="k">struct</span> <span class="n">ggml_object</span> <span class="o">*</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">ggml_new_object</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">GGML_OBJECT_TYPE_GRAPH</span><span class="p">,</span> <span class="n">obj_size</span><span class="p">);</span>
+
+<span class="c1">// Recall, obj-&gt;offs is the offset of the object from the start of the memory buffer:</span>
+<span class="k">struct</span> <span class="n">ggml_cgraph</span> <span class="o">*</span> <span class="n">cgraph</span> <span class="o">=</span> <span class="p">(</span><span class="k">struct</span> <span class="n">ggml_cgraph</span> <span class="o">*</span><span class="p">)((</span><span class="kt">char</span> <span class="o">*</span><span class="p">)</span> <span class="n">ctx</span><span class="o">-&gt;</span><span class="n">mem_buffer</span> <span class="o">+</span> <span class="n">obj</span><span class="o">-&gt;</span><span class="n">offs</span><span class="p">);</span>
+
+<span class="c1">// The size of the hash table is doubled since it needs to hold both nodes and leafs</span>
+<span class="kt">size_t</span> <span class="n">hash_size</span> <span class="o">=</span> <span class="n">ggml_hash_size</span><span class="p">(</span><span class="n">size</span> <span class="o">*</span> <span class="mi">2</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>We next construct a <em>hash table</em> of size <code class="language-plaintext highlighter-rouge">first_prime_larger_than(size * 2)</code>; this
+table will be used to store a visited set of tensors when we recursively construct
+our computational graph (tree) atop tensor operations. ggml uses a simple
+hash table implementation with open addressing and linear probing; a prime size
+minimizes the number of collisions produced by the hash function (reproduced below,
+without the final <code class="language-plaintext highlighter-rouge">% size</code>).</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// hash function for ggml_tensor</span>
+<span class="k">static</span> <span class="kr">inline</span> <span class="kt">size_t</span> <span class="nf">ggml_hash</span><span class="p">(</span><span class="k">const</span> <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span> <span class="p">{</span>
+  <span class="c1">// the last 4 bits are always zero due to alignment</span>
+  <span class="k">return</span> <span class="p">(</span><span class="kt">size_t</span><span class="p">)(</span><span class="kt">uintptr_t</span><span class="p">)</span><span class="n">p</span> <span class="o">&gt;&gt;</span> <span class="mi">4</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>We subsequently initialize the members of <code class="language-plaintext highlighter-rouge">ggml_cgraph</code> while preserving pointer
+alignment, and clear the hash table and gradients if present. This completes
+initalization of the <code class="language-plaintext highlighter-rouge">cgraph</code> object; our next step is to add nodes and
+leafs to the graph corresponding to operations that we perform on our input
+tensors. We do so with the following operations:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/* Construct result tensor; store tensor metadata (the ggml_object)
+   in ctx0, but tensor data will not be allocated yet. */</span>
+<span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">ggml_mul_mat</span><span class="p">(</span><span class="n">ctx0</span><span class="p">,</span> <span class="n">model</span><span class="p">.</span><span class="n">a</span><span class="p">,</span> <span class="n">model</span><span class="p">.</span><span class="n">b</span><span class="p">);</span>
+
+<span class="cm">/* Recursively post-order traverse the graph (starting from `result`),
+   updating node names and keeping track of nodes and leaves. */</span> 
+<span class="n">ggml_build_forward_expand</span><span class="p">(</span><span class="n">gf</span><span class="p">,</span> <span class="n">result</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Note that <code class="language-plaintext highlighter-rouge">ggml_mul_mat</code> does not eagerly perform matrix multiplication;
+instead, it simply constructs a new result tensor object and stores information
+about the operation that computed it. In our case, this object is
+constructed in <code class="language-plaintext highlighter-rouge">ctx0</code>; its <code class="language-plaintext highlighter-rouge">ggml_object</code> will be constructed within the
+previously statically allocated <code class="language-plaintext highlighter-rouge">buf</code> (on CPU), but its data will not yet
+be allocated.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="nf">ggml_mul_mat</span><span class="p">(</span>
+        <span class="k">struct</span> <span class="n">ggml_context</span> <span class="o">*</span> <span class="n">ctx</span><span class="p">,</span>
+        <span class="k">struct</span> <span class="n">ggml_tensor</span>  <span class="o">*</span> <span class="n">a</span><span class="p">,</span>
+        <span class="k">struct</span> <span class="n">ggml_tensor</span>  <span class="o">*</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+  <span class="n">GGML_ASSERT</span><span class="p">(</span><span class="n">ggml_can_mul_mat</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">));</span>
+  <span class="n">GGML_ASSERT</span><span class="p">(</span><span class="o">!</span><span class="n">ggml_is_transposed</span><span class="p">(</span><span class="n">a</span><span class="p">));</span>
+
+  <span class="k">const</span> <span class="kt">int64_t</span> <span class="n">ne</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span> <span class="n">a</span><span class="o">-&gt;</span><span class="n">ne</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="o">-&gt;</span><span class="n">ne</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">b</span><span class="o">-&gt;</span><span class="n">ne</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">b</span><span class="o">-&gt;</span><span class="n">ne</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="p">};</span>
+  <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">ggml_new_tensor</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">GGML_TYPE_F32</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">ne</span><span class="p">);</span>
+
+  <span class="n">result</span><span class="o">-&gt;</span><span class="n">op</span>     <span class="o">=</span> <span class="n">GGML_OP_MUL_MAT</span><span class="p">;</span>
+  <span class="n">result</span><span class="o">-&gt;</span><span class="n">src</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">;</span>
+  <span class="n">result</span><span class="o">-&gt;</span><span class="n">src</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">b</span><span class="p">;</span>
+
+  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>And that’s that! We’ve now fully initialized our computational graph, with
+leaves (constant or input tensors) and nodes (tensors that are a result of
+operations) properly named. Nodes are constructed with their operations and
+inputs stored as references, so the forward pass has all the information it
+needs to compute them from inputs.</p>
+
+<h3 id="allocating-intermediate-tensors-ggml_allocr">Allocating intermediate tensors: <code class="language-plaintext highlighter-rouge">ggml_allocr</code></h3>
+
+<p>With a better understanding of <code class="language-plaintext highlighter-rouge">ggml_cgraph</code>, we can now turn our attention to
+the previously mentioned <code class="language-plaintext highlighter-rouge">ggml_allocr</code>, which allocates all the (previously
+unallocated) tensor data on our device, due to the setting of <code class="language-plaintext highlighter-rouge">no_alloc</code> to
+<code class="language-plaintext highlighter-rouge">false</code> in <code class="language-plaintext highlighter-rouge">ctx0</code>. Recall that <code class="language-plaintext highlighter-rouge">ggml_allocr</code> operates on the model’s backend
+buffer (in our case, GPU 0).</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">ggml_allocr</code> struct is defined as</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">ggml_gallocr</span> <span class="p">{</span>
+  <span class="n">ggml_backend_buffer_type_t</span> <span class="o">*</span> <span class="n">bufts</span><span class="p">;</span> <span class="c1">// [n_buffers]</span>
+  <span class="n">ggml_backend_buffer_t</span> <span class="o">*</span> <span class="n">buffers</span><span class="p">;</span> <span class="c1">// [n_buffers]</span>
+  <span class="k">struct</span> <span class="n">ggml_dyn_tallocr</span> <span class="o">**</span> <span class="n">buf_tallocs</span><span class="p">;</span> <span class="c1">// [n_buffers]</span>
+  <span class="kt">int</span> <span class="n">n_buffers</span><span class="p">;</span>
+
+  <span class="k">struct</span> <span class="n">ggml_hash_set</span> <span class="n">hash_set</span><span class="p">;</span>
+  <span class="k">struct</span> <span class="n">hash_node</span> <span class="o">*</span> <span class="n">hash_values</span><span class="p">;</span> <span class="c1">// [hash_set.size]</span>
+
+  <span class="k">struct</span> <span class="n">node_alloc</span> <span class="o">*</span> <span class="n">node_allocs</span><span class="p">;</span> <span class="c1">// [n_nodes]</span>
+  <span class="kt">int</span> <span class="n">n_nodes</span><span class="p">;</span>
+
+  <span class="k">struct</span> <span class="n">leaf_alloc</span> <span class="o">*</span> <span class="n">leaf_allocs</span><span class="p">;</span> <span class="c1">// [n_leafs]</span>
+  <span class="kt">int</span> <span class="n">n_leafs</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+<p>which should intuitively make some sense: the allocator’s job is to allocate
+nodes and leaves into the model’s buffer, and to do so it must keep track of
+its visited tensors and the allocation metadata of all allocated nodes and
+leaves (to handle things like permutations and views). The complexity here is
+mostly within <code class="language-plaintext highlighter-rouge">ggml_gallocr_allocate_node</code>, for the interested reader.</p>
+
+<p>We’ve now defined our computational graph and allocated memory in our backend
+buffer for all intermediate tensors produced as a result of performing the
+operations in our graph. All that’s left to do is to run the model forward
+pass, executing the <code class="language-plaintext highlighter-rouge">op</code>s that produce nodes from leaves, and read out the
+data in the <code class="language-plaintext highlighter-rouge">result</code> tensor.</p>
+
+<h2 id="part-3-forwarding-the-computational-graph">Part 3: Forwarding the Computational Graph</h2>
+
+<p>Executing a forward pass boils down to the following two calls:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// The actual forward pass:</span>
+<span class="n">ggml_backend_graph_compute</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">backend</span><span class="p">,</span> <span class="n">gf</span><span class="p">);</span>
+
+<span class="c1">// In our case, the output tensor is the last one in the graph:</span>
+<span class="k">return</span> <span class="nf">ggml_graph_node</span><span class="p">(</span><span class="n">gf</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>The call to <code class="language-plaintext highlighter-rouge">ggml_backend_graph_compute</code> calls the appropriate backend interface:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">enum</span> <span class="n">ggml_status</span> <span class="nf">ggml_backend_graph_compute_async</span><span class="p">(</span>
+  <span class="n">ggml_backend_t</span> <span class="n">backend</span><span class="p">,</span> <span class="k">struct</span> <span class="n">ggml_cgraph</span> <span class="o">*</span> <span class="n">cgraph</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">backend</span><span class="o">-&gt;</span><span class="n">iface</span><span class="p">.</span><span class="n">graph_compute</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="n">cgraph</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>which forwards the computational graph over the specified backend (defined by a
+backend-dependent implementation) and stores computed results in their associated
+pre-allocated tensors.</p>
+
+<p><strong>CUDA, continued.</strong> In the CUDA backend, <code class="language-plaintext highlighter-rouge">graph_compute</code> is a relatively
+involved method that optionally utilizes CUDA graphs to bundle the operations
+comprising the forward pass into one single unit. Without CUDA graphs, the
+backend iterates over all nodes in the graph:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Massive oversimplifiation...</span>
+<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">cgraph</span><span class="o">-&gt;</span><span class="n">n_nodes</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+  <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">node</span> <span class="o">=</span> <span class="n">cgraph</span><span class="o">-&gt;</span><span class="n">nodes</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+  <span class="n">ggml_cuda_compute_forward</span><span class="p">(</span><span class="o">*</span><span class="n">cuda_ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">);</span> 
+<span class="p">}</span>
+</code></pre></div></div>
+<p>and computes the forward pass in a large <code class="language-plaintext highlighter-rouge">switch</code> statement, calling into respective
+kernels:</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">static</span> <span class="n">bool</span> <span class="nf">ggml_cuda_compute_forward</span><span class="p">(</span>
+  <span class="n">ggml_backend_cuda_context</span> <span class="o">&amp;</span> <span class="n">ctx</span><span class="p">,</span> <span class="k">struct</span> <span class="n">ggml_tensor</span> <span class="o">*</span> <span class="n">dst</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">switch</span> <span class="p">(</span><span class="n">dst</span><span class="o">-&gt;</span><span class="n">op</span><span class="p">)</span> <span class="p">{</span>
+      <span class="k">case</span> <span class="n">GGML_OP_ARGMAX</span><span class="p">:</span>
+        <span class="n">ggml_cuda_argmax</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">dst</span><span class="p">);</span>
+        <span class="k">break</span><span class="p">;</span>
+      <span class="k">case</span> <span class="n">GGML_OP_COUNT_EQUAL</span><span class="p">:</span>
+        <span class="n">ggml_cuda_count_equal</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">dst</span><span class="p">);</span>
+        <span class="k">break</span><span class="p">;</span>
+      <span class="k">case</span> <span class="n">GGML_OP_REPEAT</span><span class="p">:</span>
+        <span class="n">ggml_cuda_op_repeat</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">dst</span><span class="p">);</span>
+        <span class="k">break</span><span class="p">;</span>
+
+      <span class="cm">/* ... and so on, you get the picture */</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>where all operations write into the <code class="language-plaintext highlighter-rouge">dst</code> tensor’s memory. Of course, each operation is heavily
+optimized in <code class="language-plaintext highlighter-rouge">ggml</code>, and the kernels are pretty cool to examine in depth; we’ll leave that for
+a separate blog post.</p>
+
+<h2 id="wrapping-up">Wrapping Up</h2>
+
+<p>This (rather long) post covers many of the core principles underlying the
+<code class="language-plaintext highlighter-rouge">ggml</code> library, from devices to backends, computational graphs, tensors, and
+the model forward pass. While the explicit management of devices, memory
+buffers, allocation/deallocation, and static graph construction can be tough to
+wrap one’s head around (and is likely not necessary for many exploratory
+machine learning applications), it provides large efficiency gains, reduces
+forward pass overhead, and is an excellent pedagogical tool.</p>
+
+<h2 id="notes">Notes</h2>
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1">
+      <p>In <code class="language-plaintext highlighter-rouge">ggml</code>, $n &lt; 4$ as transformers do not need more than a 4-d tensor. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2">
+      <p>See <a href="https://stackoverflow.com/a/46154721/3242010">this StackOverflow</a> answer for more details. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3">
+      <p>At the risk of massive oversimplification, it’s a <code class="language-plaintext highlighter-rouge">Makefile</code> generator. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4">
+      <p>A CUDA device corresponds to one GPU. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+    </div>
+    <div id='bibliography'>
+        <div class='wrap'>
+            <ol class="bibliography"></ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>
