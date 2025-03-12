@@ -1,0 +1,534 @@
+<html>
+<head>
+    <title>Elegant local language model inference with ollama</title>
+    <meta charset='UTF-8'>
+    <meta content='width=device-width, initial-scale=1' name='viewport'/>
+
+    <meta name='description' content='Manan Shah'>
+    <meta name='keywords' content='machine learning, systems'>
+    <meta name='author' content='Manan Shah'>
+
+    <link href='/css/callout.css' rel='stylesheet'/>
+    <link href='/css/blog.css' rel='stylesheet'/>
+    <link href='/css/trac.css' rel='stylesheet'/>
+    <link href='/css/markdown.css' rel='stylesheet'/>
+
+    <script type='text/x-mathjax-config'>
+            
+MathJax.Hub.Config({
+  jax: ['input/TeX', 'output/HTML-CSS'],
+  tex2jax: {
+    inlineMath: [ ['$', '$'] ],
+    displayMath: [ ['$$', '$$']],
+    processEscapes: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+    extensions: ['color.js']
+  },
+  messageStyle: 'none',
+  'HTML-CSS': { preferredFont: 'TeX', availableFonts: ['STIX','TeX'] }
+});
+
+</script>
+
+<!-- this is necessary to get the mathjax config working! -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']]
+  }
+};
+</script>
+
+<script type='text/javascript' src='https://cdn.jsdelivr.net/npm/mathjax@3.0.0/es5/tex-mml-chtml.js'></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+
+
+
+    <!--- <script src="/assets/katex.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" integrity="sha512-LQNxIMR5rXv7o+b1l8+N1EZMfhG7iFZ9HhnbJkTp4zjNr5Wvst75AqUeFDxeRUa7l5vEDyUiAip//r+EFLLCyA==" crossorigin="anonymous"></script>
+    <script src="/assets/pseudocode.min.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="/assets/pseudocode.min.css" type="text/css">
+
+</head>
+<body>
+<div class='content'>
+    <div class='nav'>
+    <ul class='wrap'>
+        <li><a href='/'>Home</a></li>
+        <li><a href='/blog'>Blog</a></li>
+        <li><a href='/feed.xml'>RSS</a></li>
+    </ul>
+</div>
+    <div class='front-matter'>
+        <div class='wrap'>
+            <h1>Elegant local language model inference with ollama</h1>
+            <h4>We investigate the internals of ollama, a widely-adored local LLM inference management platform built atop ggml.</h4>
+            <div class='bylines'>
+                <div class='byline'>
+                    <h3>Published&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Updated&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Categories</h3>
+                    <p>2025-03-11 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2025-03-11&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;machine learning, systems</p>
+                </div>
+            </div>
+            <div class='clear'></div>
+        </div>
+    </div>
+    <div class='wrap article'>
+        <h2 id="introduction">Introduction</h2>
+
+<p>Getting started with <code class="language-plaintext highlighter-rouge">ollama</code> is simple: clone the repository, follow the
+<a href="https://github.com/ollama/ollama/blob/main/docs/development.md">development build
+instructions</a>,
+and run the following two commands to spin up a server and set up inference on
+Qwen’s latest <code class="language-plaintext highlighter-rouge">qwq</code> reasoning model:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go run <span class="nb">.</span> serve &amp;  <span class="c"># Start the ollama server in the background</span>
+go run <span class="nb">.</span> run qwq  <span class="c"># For example, run Qwen `qwq` (~20GB)</span>
+</code></pre></div></div>
+
+<p>Upon doing so, you’ll note that the server prints many interesting logs (most
+notably, many logs from the <code class="language-plaintext highlighter-rouge">ggml</code> library, an early indicator that <code class="language-plaintext highlighter-rouge">ggml</code> is
+doing the heavy lifting for our inference calls); we’ll come back to these
+later. The client displays a UI likely familiar to those who have worked with
+Docker before, indicating that Ollama stores its models in layers:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pulling manifest
+pulling c62ccde5630c... 100% ▕████████████████████████▏  19 GB
+pulling 41190096a061... 100% ▕████████████████████████▏ 1.2 KB
+pulling d18a5cc71b84... 100% ▕████████████████████████▏  11 KB
+pulling 4afe5edfdb51... 100% ▕████████████████████████▏   77 B
+pulling 6a8faa2fb8b0... 100% ▕████████████████████████▏  488 B
+verifying sha256 digest
+writing manifest
+success
+</code></pre></div></div>
+<p>After the model is fetched, we can run inference in a straightforward manner
+(assuming we have enough RAM):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt;&gt;&gt; How many times does the letter 'r' appear in the word "strawberry"?
+&lt;think&gt;
+...
+</code></pre></div></div>
+<p>… and we’re off, no extra work needed: that’s a pretty neat user experience.</p>
+
+<p>In this post, we’ll invesigate some of the internals of Ollama, from the model
+registry to the inference forward pass and key-value cache. At a high level,
+the project is written in Go, and aims to provide a proper API, command line
+interface, and model registry layer atop the <code class="language-plaintext highlighter-rouge">ggml</code> on-device model inference
+library. While the majority of this logic is orthogonal to the actual forward
+pass implementation in ggml (if you’re curious about that, see my earlier post
+on ggml internals), it’s still instructive to walk through the rest of the
+implementation to provide a neat, condensed, and usable LLM serving workflow.</p>
+
+<h2 id="the-ollama-model-registry">The Ollama Model Registry</h2>
+
+<p>We’ll begin with the Ollama Modelfile and registry, the first key feature the
+library adds atop a typical language model inference libary. Here, Ollama takes
+heavy inspiration from Docker, in both its Modelfile definition and registry
+implementation.</p>
+
+<h3 id="the-modelfile">The <code class="language-plaintext highlighter-rouge">Modelfile</code></h3>
+
+<p>A sample Ollama Modelfile can be written as follows:</p>
+<div class="language-dockerfile highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">FROM</span><span class="s"> llama3.2</span>
+PARAMETER temperature 1
+PARAMETER num_ctx 4096
+SYSTEM You are Mario from super mario bros, acting as an assistant.
+</code></pre></div></div>
+
+<p>In analogy to a typical Dockerfile, the base model (defined in the <code class="language-plaintext highlighter-rouge">FROM</code>
+instruction) plays the role of a base image, and subsequent commands that
+augment the model in different ways (<em>e.g.</em> parameters used for inference, the
+system prompt, adapters) are added in separate layers. This allows for re-use
+of common components across models; for example, multiple Modelfiles can be
+constructed from the <code class="language-plaintext highlighter-rouge">llama3.2</code> base, and the base model will only be
+downloaded once (in an identical fashion to the role of the Docker layer
+cache).</p>
+
+<p>For full documentation on the parameters that can be included in a Modelfile,
+visit the <a href="https://github.com/ollama/ollama/blob/master/docs/modelfile.md#L4">Ollama
+documentation</a>
+on the subject. The parser itself is a <a href="https://github.com/ollama/ollama/blob/main/parser/parser.go">single Go
+file</a>, if you’re
+curious about its mechanics.</p>
+
+<h3 id="creating-model-images-from-modelfiles">Creating model images from <code class="language-plaintext highlighter-rouge">Modelfile</code>s</h3>
+
+<p>A natural question is how the “layers” of a <code class="language-plaintext highlighter-rouge">Modelfile</code> are physically
+represented. The answer is in two parts: plain-text layers are stored
+as JSON (<em>e.g.</em> parameters, messages, etc.) or text (<em>e.g.</em> LICENSE), and model
+data is stored in
+<a href="https://github.com/ggml-org/ggml/blob/master/docs/gguf.md"><code class="language-plaintext highlighter-rouge">GGUF</code></a> or
+<code class="language-plaintext highlighter-rouge">safetensors</code> format.</p>
+
+<p>The Modelfile model creation handler implementation (the handler for
+<code class="language-plaintext highlighter-rouge">/api/create</code>) shines some more light on how exactly these layers are
+interpreted by Ollama. A creation request sent by the client to the
+server is typed as</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// CreateRequest is the request passed to [Client.Create]. It's a</span>
+<span class="c">// parsed representation of the user-provided Modelfile.</span>
+<span class="k">type</span> <span class="n">CreateRequest</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">Model</span>    <span class="kt">string</span> <span class="s">`json:"model"`</span>
+  <span class="n">Stream</span>   <span class="o">*</span><span class="kt">bool</span>  <span class="s">`json:"stream,omitempty"`</span>
+  <span class="n">Quantize</span> <span class="kt">string</span> <span class="s">`json:"quantize,omitempty"`</span>
+
+  <span class="n">From</span>       <span class="kt">string</span>            <span class="s">`json:"from,omitempty"`</span>
+  <span class="n">Files</span>      <span class="k">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span> <span class="s">`json:"files,omitempty"`</span>
+  <span class="n">Adapters</span>   <span class="k">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span> <span class="s">`json:"adapters,omitempty"`</span>
+  <span class="n">Template</span>   <span class="kt">string</span>            <span class="s">`json:"template,omitempty"`</span>
+  <span class="n">License</span>    <span class="n">any</span>               <span class="s">`json:"license,omitempty"`</span>
+  <span class="n">System</span>     <span class="kt">string</span>            <span class="s">`json:"system,omitempty"`</span>
+  <span class="n">Parameters</span> <span class="k">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="n">any</span>    <span class="s">`json:"parameters,omitempty"`</span>
+  <span class="n">Messages</span>   <span class="p">[]</span><span class="n">Message</span>         <span class="s">`json:"messages,omitempty"`</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>which is as we expect; the model name and relevant options/parameters are
+passed as structured objects from the client (which parses the raw <code class="language-plaintext highlighter-rouge">Modelfile</code>)
+to the server; the server is expected to pull relevant binary blobs from the
+registry and handle actual model creation.</p>
+
+<p>The request creation handler is located
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/create.go#L41">here</a>.
+If a <code class="language-plaintext highlighter-rouge">FROM</code> statement is part of the
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/create.go#L80">request</a>
+(the model is being fetched from a name, <em>e.g.</em> on the Ollama registry), the
+model and manifest are
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/images.go#L526">pulled</a>
+from the registry and written to local disk, in a cache directory. All models
+on the Ollama registry are stored in GGUF format, which we’ll focus on here:
+it’s also possible to import from <code class="language-plaintext highlighter-rouge">safetensors</code>, with details
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/create.go#L95-L106">here</a>
+for the interested reader. A useful depiction of the GGUF file format is below;
+the documentation <a href="https://github.com/ggml-org/ggml/blob/master/docs/gguf.md">in
+ggml</a> does an
+excellent job describing its semantics.</p>
+
+<p><img src="https://private-user-images.githubusercontent.com/1991296/313174776-c3623641-3a1d-408e-bfaf-1b7c4e16aa63.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDE3NTQzMjksIm5iZiI6MTc0MTc1NDAyOSwicGF0aCI6Ii8xOTkxMjk2LzMxMzE3NDc3Ni1jMzYyMzY0MS0zYTFkLTQwOGUtYmZhZi0xYjdjNGUxNmFhNjMucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI1MDMxMiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNTAzMTJUMDQzMzQ5WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9Y2ViYTE5OTNjMThmYjQyNjQ3ZmFjOTQ5NDNiODU5ZDA1M2NjZTc2MWZhOGMxM2ZjZjk0YmJlYjA2ZDg2YzJlYiZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QifQ.GQNHVKRFhAtmimBocH5NXKTwcnhjzJu4KCsA7P5AZTA" alt="drawing" width="700" /></p>
+
+<p>After pulling the model’s GGUF binary blobs, the blobs are parsed (see the
+decode call
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/model.go#L67">here</a>,
+which is initially parsed
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/fs/ggml/gguf.go#L47">here</a>
+and parsed in detail
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/fs/ggml/gguf.go#L141">here</a>)
+and used to construct an array of base layers, typed as an array of pointers to
+<code class="language-plaintext highlighter-rouge">layerGGML</code> (which mirror the metadata stored on disk). Adapter layers are
+considered separately from base layers, but are also typed the same way and
+merged with base layers.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">layerGGML</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">Layer</span>        <span class="c">// map[string]*Tensor, where Tensor holds the GGML tensor metadata</span>
+  <span class="o">*</span><span class="n">ggml</span><span class="o">.</span><span class="n">GGML</span>   <span class="c">// a pointer to the full model metadata, which points to all tensors</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p><em>Note that no model tensor data is loaded into CPU DRAM at this point in time!</em>
+All in-memory objects represent metadata corresponding to the <code class="language-plaintext highlighter-rouge">GGUF</code> file: the
+actual tensor data will be read and moved to device when the model is loaded
+at inference time.</p>
+
+<p>Finally, a full model is created from the <code class="language-plaintext highlighter-rouge">[]*layerGGML</code> metadata and the
+template, system prompt, and hyperparameters. Interestingly, layer quantization
+also happens at this stage (and is used to construct <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/create.go#L342">new
+layers</a>,
+which replace the old ones). An final manifest for the requested Modelfile is
+written with this information (under a directory keyed by the hash of the
+Modelfile; <em>e.g</em>, the Modelfile digest); the manifest is later loaded when a
+model is fetched for inference, to avoid GGUF parsing multiple times.</p>
+
+<p>We now have a rough sense of what a <code class="language-plaintext highlighter-rouge">Modelfile</code> really is—it’s a declarative
+representation of a model and its prompt, represented as a collection of layers
+either stored as text (for prompt, hyperparameter, and other metadata) or in
+<code class="language-plaintext highlighter-rouge">GGUF</code> format (for model tensor data). Ollama parses Modelfiles to construct
+Manifests that point to <code class="language-plaintext highlighter-rouge">GGUF</code> model tensor data files pulled to local disk,
+which are ultimately used for inference when generation APIs are called.</p>
+
+<h3 id="support-for-a-model-registry">Support for a model registry</h3>
+
+<p>Modelfiles thus perfectly define the concept of a “model image”, which can be
+used analogously to Docker images (<em>e.g.</em> to share, remix, and derive from).
+Any parsed Modelfile is associated with (a) a Manifest and (b) a GGUF-backed
+tensor data representation, which can then be fetched and used in a <code class="language-plaintext highlighter-rouge">FROM</code>
+statement by a second Modelfile. One can also imagine tagging these “model 
+image”s just as Docker images are tagged, so users can pull model files at
+different versions.</p>
+
+<p>The Ollama service provides the following APIs to facilitate this basic idea
+of a model registry:</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// Create models</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/create"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">CreateHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/blobs/:digest"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">CreateBlobHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">HEAD</span><span class="p">(</span><span class="s">"/api/blobs/:digest"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">HeadBlobHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/copy"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">CopyHandler</span><span class="p">)</span>
+
+<span class="c">// Read, update models in registry</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/pull"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">PullHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/push"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">PushHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">HEAD</span><span class="p">(</span><span class="s">"/api/tags"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">ListHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">GET</span><span class="p">(</span><span class="s">"/api/tags"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">ListHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/show"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">ShowHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">DELETE</span><span class="p">(</span><span class="s">"/api/delete"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">DeleteHandler</span><span class="p">)</span>
+</code></pre></div></div>
+<p>With time, I’m sure more Docker-like features will continue to be added.</p>
+
+<h2 id="the-ollama-architecture">The Ollama Architecture</h2>
+
+<p>With knowledge of how Ollama interprets Modelfiles, we’re ready to understand
+its client/server architecture and implementation of model inference. We’ll
+cover the design of four key components: client, server, scheduler, and
+model runner.</p>
+
+<h3 id="client">Client</h3>
+
+<p>While the Ollama client-side API is used by multiple frontend interfaces, we’ll
+focus on the command-line client implementation here. Client state is kept very
+light: a base URL and <code class="language-plaintext highlighter-rouge">*http.Client</code> suffice:</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">Client</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">base</span> <span class="o">*</span><span class="n">url</span><span class="o">.</span><span class="n">URL</span>
+  <span class="n">http</span> <span class="o">*</span><span class="n">http</span><span class="o">.</span><span class="n">Client</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Two <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/api/client.go#L100">core
+methods</a>
+are implemented on the <code class="language-plaintext highlighter-rouge">Cilent</code> interface:</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// Batch:</span>
+<span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="o">*</span><span class="n">Client</span><span class="p">)</span> <span class="n">do</span><span class="p">(</span>
+  <span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span> <span class="kt">string</span><span class="p">,</span> <span class="n">reqData</span><span class="p">,</span> <span class="n">respData</span> <span class="n">any</span><span class="p">)</span> <span class="kt">error</span>
+
+<span class="c">// Streaming:</span>
+<span class="k">func</span> <span class="p">(</span><span class="n">c</span> <span class="o">*</span><span class="n">Client</span><span class="p">)</span> <span class="n">stream</span><span class="p">(</span>
+  <span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span> <span class="kt">string</span><span class="p">,</span> <span class="n">data</span> <span class="n">any</span><span class="p">,</span> <span class="n">fn</span> <span class="k">func</span><span class="p">([]</span><span class="kt">byte</span><span class="p">)</span> <span class="kt">error</span>
+</code></pre></div></div>
+<p>These methods are similar in their implementation, with one
+notable difference: while <code class="language-plaintext highlighter-rouge">do</code> reads the entire response
+body and returns data to the user, <code class="language-plaintext highlighter-rouge">stream</code> creates a new
+buffer and scans chunks of the response until completion.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// Note: error handling in both examples has been elided.</span>
+
+<span class="c">// do(...):</span>
+<span class="n">respObj</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">c</span><span class="o">.</span><span class="n">http</span><span class="o">.</span><span class="n">Do</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<span class="k">defer</span> <span class="n">respObj</span><span class="o">.</span><span class="n">Body</span><span class="o">.</span><span class="n">Close</span><span class="p">()</span>
+<span class="n">respBody</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">io</span><span class="o">.</span><span class="n">ReadAll</span><span class="p">(</span><span class="n">respObj</span><span class="o">.</span><span class="n">Body</span><span class="p">)</span>
+
+<span class="c">// stream(...):</span>
+<span class="n">scanner</span> <span class="o">:=</span> <span class="n">bufio</span><span class="o">.</span><span class="n">NewScanner</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">Body</span><span class="p">)</span>
+<span class="n">scanBuf</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="m">0</span><span class="p">,</span> <span class="n">maxBufferSize</span><span class="p">)</span>
+<span class="n">scanner</span><span class="o">.</span><span class="n">Buffer</span><span class="p">(</span><span class="n">scanBuf</span><span class="p">,</span> <span class="n">maxBufferSize</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">scanner</span><span class="o">.</span><span class="n">Scan</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">var</span> <span class="n">errorResponse</span> <span class="k">struct</span> <span class="p">{</span>
+    <span class="n">Error</span> <span class="kt">string</span> <span class="s">`json:"error,omitempty"`</span>
+  <span class="p">}</span>
+  <span class="n">bts</span> <span class="o">:=</span> <span class="n">scanner</span><span class="o">.</span><span class="n">Bytes</span><span class="p">()</span>
+  <span class="k">if</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">fn</span><span class="p">(</span><span class="n">bts</span><span class="p">);</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">err</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Individual method handlers are implemented in batch or streaming mode depending
+on the contract with the server-side implementation. For more information,
+see the <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/api/client.go">implementation</a>
+and <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/api/types.go">types</a>.</p>
+
+<h3 id="server-and-scheduler">Server and Scheduler</h3>
+
+<p>The server performs routing, scheduling, and handoff to the Ollama runner for
+model inference. Alongside the model registry APIs listed above, the server
+implements the following inference APIs, along with some OpenAI API
+compatibility functionality.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// Inference</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/generate"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">GenerateHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/chat"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">ChatHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/embed"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">EmbedHandler</span><span class="p">)</span>
+<span class="n">r</span><span class="o">.</span><span class="n">POST</span><span class="p">(</span><span class="s">"/api/embeddings"</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">EmbeddingsHandler</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>The server is created 
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/routes.go#L1219">here</a>
+(from command line
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/cmd/cmd.go#L1032">here</a>).
+Its state is also kept very light:</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">Server</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">addr</span>  <span class="n">net</span><span class="o">.</span><span class="n">Addr</span>
+  <span class="n">sched</span> <span class="o">*</span><span class="n">Scheduler</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Alongside route generation, the brunt of the server’s work is offloaded to a
+scheduler, which processes requests to load/unload models and run inference.
+The scheduler maintains state of all queued requests and runners for loaded
+models (which are created by <code class="language-plaintext highlighter-rouge">newServerFn</code>).</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">Scheduler</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">pendingReqCh</span>  <span class="k">chan</span> <span class="o">*</span><span class="n">LlmRequest</span>
+  <span class="n">finishedReqCh</span> <span class="k">chan</span> <span class="o">*</span><span class="n">LlmRequest</span>
+  <span class="n">expiredCh</span>     <span class="k">chan</span> <span class="o">*</span><span class="n">runnerRef</span>
+  <span class="n">unloadedCh</span>    <span class="k">chan</span> <span class="k">interface</span><span class="p">{}</span>
+
+  <span class="n">loaded</span>   <span class="k">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="o">*</span><span class="n">runnerRef</span>
+  <span class="n">loadedMu</span> <span class="n">sync</span><span class="o">.</span><span class="n">Mutex</span>
+
+  <span class="n">loadFn</span>       <span class="k">func</span><span class="p">(</span>
+                  <span class="n">req</span> <span class="o">*</span><span class="n">LlmRequest</span><span class="p">,</span> <span class="n">f</span> <span class="o">*</span><span class="n">ggml</span><span class="o">.</span><span class="n">GGML</span><span class="p">,</span> <span class="n">gpus</span> <span class="n">discover</span><span class="o">.</span><span class="n">GpuInfoList</span><span class="p">,</span>
+                  <span class="n">numParallel</span> <span class="kt">int</span><span class="p">)</span>
+  <span class="n">newServerFn</span>  <span class="k">func</span><span class="p">(</span>
+                  <span class="n">gpus</span> <span class="n">discover</span><span class="o">.</span><span class="n">GpuInfoList</span><span class="p">,</span> <span class="n">model</span> <span class="kt">string</span><span class="p">,</span> <span class="n">f</span> <span class="o">*</span><span class="n">ggml</span><span class="o">.</span><span class="n">GGML</span><span class="p">,</span>
+                  <span class="n">adapters</span> <span class="p">[]</span><span class="kt">string</span><span class="p">,</span> <span class="n">projectors</span> <span class="p">[]</span><span class="kt">string</span><span class="p">,</span> <span class="n">opts</span> <span class="n">api</span><span class="o">.</span><span class="n">Options</span><span class="p">,</span>
+                  <span class="n">numParallel</span> <span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="n">llm</span><span class="o">.</span><span class="n">LlamaServer</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+  <span class="n">getGpuFn</span>     <span class="k">func</span><span class="p">()</span> <span class="n">discover</span><span class="o">.</span><span class="n">GpuInfoList</span>
+  <span class="n">getCpuFn</span>     <span class="k">func</span><span class="p">()</span> <span class="n">discover</span><span class="o">.</span><span class="n">GpuInfoList</span>
+  <span class="n">reschedDelay</span> <span class="n">time</span><span class="o">.</span><span class="n">Duration</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Scheduler logic can be somewhat involved; to break it down, let’s walk through
+an invocation of <code class="language-plaintext highlighter-rouge">/api/generate</code>. When the server is first started (before any
+API calls are serviced), it initializes and starts the scheduler, which
+runs two goroutines that live for the lifetime of the server and process
+queued/completed requests on the scheduler’s channels.</p>
+
+<p>When an API request is received, the HTTP routing layer first calls the server
+handler
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/routes.go#L120">here</a>,
+with a request that includes the model name, prompt, and other <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/api/types.go#L44">optional
+data</a>.
+The handler fetches the model Manifest and loads model metadata; it also
+constructs the final prompt from request metadata.</p>
+
+<p>After validating inputs, capabilities, and the prompt, the server <a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/routes.go#L90">schedules a Runner</a> by submitting a request to the scheduler:</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">req</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="n">LlmRequest</span><span class="p">{</span>
+  <span class="n">ctx</span><span class="o">:</span>             <span class="n">c</span><span class="p">,</span>
+  <span class="n">model</span><span class="o">:</span>           <span class="n">model</span><span class="p">,</span>
+  <span class="n">opts</span><span class="o">:</span>            <span class="n">opts</span><span class="p">,</span>
+  <span class="n">sessionDuration</span><span class="o">:</span> <span class="n">sessionDuration</span><span class="p">,</span>
+  <span class="n">successCh</span><span class="o">:</span>       <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="o">*</span><span class="n">runnerRef</span><span class="p">),</span>
+  <span class="n">errCh</span><span class="o">:</span>           <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="kt">error</span><span class="p">,</span> <span class="m">1</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="k">select</span> <span class="p">{</span>
+<span class="k">case</span> <span class="n">s</span><span class="o">.</span><span class="n">pendingReqCh</span> <span class="o">&lt;-</span> <span class="n">req</span><span class="o">:</span>
+<span class="k">default</span><span class="o">:</span>
+  <span class="n">req</span><span class="o">.</span><span class="n">errCh</span> <span class="o">&lt;-</span> <span class="n">ErrMaxQueue</span>
+<span class="p">}</span>
+
+<span class="c">// The server selects against the first of</span>
+<span class="c">// these two channels to receive a response:</span>
+<span class="k">return</span> <span class="n">req</span><span class="o">.</span><span class="n">successCh</span><span class="p">,</span> <span class="n">req</span><span class="o">.</span><span class="n">errCh</span>
+</code></pre></div></div>
+<p>The server blocks on a successful response or error from the scheduler: as is
+native in Go, doing so does not prevent other goroutines from proceeding
+(<em>e.g.</em> to accept new server requests, or perform model inference).</p>
+
+<p>When the scheduler receives a request on its pending channel, the Go runtime
+sets the goroutine that processes pending requests to runnable, and (when
+assigned to a CPU core) it executes logic to identify whether any existing
+model runners need to be expired, and assigns resources (<em>e.g.</em> GPUs). This
+logic is encapsulated
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/server/sched.go#L116">here</a>.
+After resources are assigned, the scheduler calls its <code class="language-plaintext highlighter-rouge">newServerFn</code> on the
+model, which is implemented
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/llm/server.go#L100">here</a>.
+This method is responsible for launching a <em>runner</em>, which owns the actual
+model inference execution and output generation process. When the server
+receives a handle to a runner, it makes a completion request and streams the
+token-by-token response from the runner.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">// Heavily elided; note that c is the client-side request</span>
+<span class="n">r</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">opts</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">s</span><span class="o">.</span><span class="n">scheduleRunner</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  <span class="c">// Parameters are unimportant.</span>
+<span class="k">if</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">r</span><span class="o">.</span><span class="n">Completion</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">Request</span><span class="o">.</span><span class="n">Context</span><span class="p">(),</span> <span class="n">llm</span><span class="o">.</span><span class="n">CompletionRequest</span><span class="p">{</span>
+  <span class="n">Prompt</span><span class="o">:</span>  <span class="n">prompt</span><span class="p">,</span>
+  <span class="n">Images</span><span class="o">:</span>  <span class="n">images</span><span class="p">,</span>
+  <span class="n">Format</span><span class="o">:</span>  <span class="n">req</span><span class="o">.</span><span class="n">Format</span><span class="p">,</span>
+  <span class="n">Options</span><span class="o">:</span> <span class="n">opts</span><span class="p">,</span>
+<span class="p">},</span> <span class="k">func</span><span class="p">(</span><span class="n">cr</span> <span class="n">llm</span><span class="o">.</span><span class="n">CompletionResponse</span><span class="p">)</span> <span class="p">{</span>
+  <span class="n">res</span> <span class="o">:=</span> <span class="n">api</span><span class="o">.</span><span class="n">GenerateResponse</span><span class="p">{</span>
+    <span class="n">Model</span><span class="o">:</span>      <span class="n">req</span><span class="o">.</span><span class="n">Model</span><span class="p">,</span>
+    <span class="n">CreatedAt</span><span class="o">:</span>  <span class="n">time</span><span class="o">.</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UTC</span><span class="p">(),</span>
+    <span class="n">Response</span><span class="o">:</span>   <span class="n">cr</span><span class="o">.</span><span class="n">Content</span><span class="p">,</span>
+    <span class="n">Done</span><span class="o">:</span>       <span class="n">cr</span><span class="o">.</span><span class="n">Done</span><span class="p">,</span>
+    <span class="n">DoneReason</span><span class="o">:</span> <span class="n">cr</span><span class="o">.</span><span class="n">DoneReason</span><span class="p">,</span>
+    <span class="n">Metrics</span><span class="o">:</span> <span class="n">api</span><span class="o">.</span><span class="n">Metrics</span><span class="p">{</span>
+      <span class="n">PromptEvalCount</span><span class="o">:</span>    <span class="n">cr</span><span class="o">.</span><span class="n">PromptEvalCount</span><span class="p">,</span>
+      <span class="n">PromptEvalDuration</span><span class="o">:</span> <span class="n">cr</span><span class="o">.</span><span class="n">PromptEvalDuration</span><span class="p">,</span>
+      <span class="n">EvalCount</span><span class="o">:</span>          <span class="n">cr</span><span class="o">.</span><span class="n">EvalCount</span><span class="p">,</span>
+      <span class="n">EvalDuration</span><span class="o">:</span>       <span class="n">cr</span><span class="o">.</span><span class="n">EvalDuration</span><span class="p">,</span>
+    <span class="p">},</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="runner">Runner</h3>
+
+<p>We’ll last discuss the implementation of the runner, a short-lived server that
+communicates with the main Ollama server to run inference and stream responses
+back to the user. If you watch <code class="language-plaintext highlighter-rouge">ps | grep ollama</code> while an inference call is
+running, you’ll see such a process appear:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>90217 ttys000    0:01.86 &lt;ollama_path&gt;/ollama runner --model &lt;model_path&gt; &lt;args&gt;
+</code></pre></div></div>
+
+<p>Note that one server is constructed per-model; the
+information the Ollama server stores for each runner is below.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">runnerRef</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">refMu</span> <span class="n">sync</span><span class="o">.</span><span class="n">Mutex</span>
+  <span class="n">refCount</span> <span class="kt">uint</span> <span class="c">// prevent unloading if &gt; 0</span>
+
+  <span class="n">llama</span>          <span class="n">llm</span><span class="o">.</span><span class="n">LlamaServer</span>      
+  <span class="n">loading</span>        <span class="kt">bool</span>                 <span class="c">// True only during initial load, then false forever</span>
+  <span class="n">gpus</span>           <span class="n">discover</span><span class="o">.</span><span class="n">GpuInfoList</span> <span class="c">// Recorded at time of provisioning</span>
+  <span class="n">estimatedVRAM</span>  <span class="kt">uint64</span>
+  <span class="n">estimatedTotal</span> <span class="kt">uint64</span>
+
+  <span class="n">sessionDuration</span> <span class="n">time</span><span class="o">.</span><span class="n">Duration</span>
+  <span class="n">expireTimer</span>     <span class="o">*</span><span class="n">time</span><span class="o">.</span><span class="n">Timer</span>
+  <span class="n">expiresAt</span>       <span class="n">time</span><span class="o">.</span><span class="n">Time</span>
+
+  <span class="n">model</span>       <span class="o">*</span><span class="n">Model</span>
+  <span class="n">modelPath</span>   <span class="kt">string</span>
+  <span class="n">numParallel</span> <span class="kt">int</span>
+  <span class="o">*</span><span class="n">api</span><span class="o">.</span><span class="n">Options</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>The <code class="language-plaintext highlighter-rouge">llama</code> field is an object that defines a client-side interface to the
+runner server. It is currently only implemented by the <code class="language-plaintext highlighter-rouge">llmServer</code>
+<a href="https://github.com/ollama/ollama/blob/aee28501b592e2fe98863212913ffa8fb22e1ca0/llm/server.go#L50">class</a>.</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">type</span> <span class="n">LlamaServer</span> <span class="k">interface</span> <span class="p">{</span>
+  <span class="n">Ping</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">)</span> <span class="kt">error</span>
+  <span class="n">WaitUntilRunning</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">)</span> <span class="kt">error</span>
+  <span class="n">Completion</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">req</span> <span class="n">CompletionRequest</span><span class="p">,</span> <span class="n">fn</span> <span class="k">func</span><span class="p">(</span><span class="n">CompletionResponse</span><span class="p">))</span> <span class="kt">error</span>
+  <span class="n">Embedding</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">input</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="kt">float32</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+  <span class="n">Tokenize</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">content</span> <span class="kt">string</span><span class="p">)</span> <span class="p">([]</span><span class="kt">int</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+  <span class="n">Detokenize</span><span class="p">(</span><span class="n">ctx</span> <span class="n">context</span><span class="o">.</span><span class="n">Context</span><span class="p">,</span> <span class="n">tokens</span> <span class="p">[]</span><span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kt">string</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+  <span class="n">Close</span><span class="p">()</span> <span class="kt">error</span>
+  <span class="n">EstimatedVRAM</span><span class="p">()</span> <span class="kt">uint64</span> <span class="c">// Total VRAM across all GPUs</span>
+  <span class="n">EstimatedTotal</span><span class="p">()</span> <span class="kt">uint64</span>
+  <span class="n">EstimatedVRAMByGPU</span><span class="p">(</span><span class="n">gpuID</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">uint64</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>The main method that manages the creation of servers is <code class="language-plaintext highlighter-rouge">NewLlamaServer</code>
+(<a href="https://github.com/ollama/ollama/blob/ad4e0bf3be5c11b8bdf79a0523538f1b0d43784f/llm/server.go#L100">here</a>).
+It defines two modes: the original engine (which uses <code class="language-plaintext highlighter-rouge">llama.cpp</code> Cgo bindings
+to load models) and a new engine (which uses <code class="language-plaintext highlighter-rouge">ggml</code> Cgo bindings and loads
+models atop it directly). In both modes, the runner is executed as a standalone
+binary, managed by the <code class="language-plaintext highlighter-rouge">runner</code> package within Ollama.</p>
+
+<p>In the original engine (within the <code class="language-plaintext highlighter-rouge">llamarunner</code> subdirectory), the GGUF model is
+loaded by the <code class="language-plaintext highlighter-rouge">llama.cpp</code> model <a href="https://github.com/ollama/ollama/blob/b3af953a55f0bd054937374404506c4229fbda8c/runner/llamarunner/runner.go#L849">here</a>,
+which makes the call</p>
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">m</span> <span class="o">:=</span> <span class="n">Model</span><span class="p">{</span><span class="n">c</span><span class="o">:</span> <span class="n">C</span><span class="o">.</span><span class="n">llama_model_load_from_file</span><span class="p">(</span><span class="n">C</span><span class="o">.</span><span class="n">CString</span><span class="p">(</span><span class="n">modelPath</span><span class="p">),</span> <span class="n">cparams</span><span class="p">)}</span>
+</code></pre></div></div>
+<p>In contrast, the new engine (within the <code class="language-plaintext highlighter-rouge">ollamarunner</code> subdirectory) loads the
+GGUF model directly in <code class="language-plaintext highlighter-rouge">ggml</code>
+<a href="https://github.com/ollama/ollama/blob/b3af953a55f0bd054937374404506c4229fbda8c/runner/ollamarunner/runner.go#L808">here</a>;
+it does so by calling <code class="language-plaintext highlighter-rouge">NewBackend</code>
+<a href="https://github.com/ollama/ollama/blob/b3af953a55f0bd054937374404506c4229fbda8c/model/model.go#L102">here</a>,
+which calls <code class="language-plaintext highlighter-rouge">New</code> within <code class="language-plaintext highlighter-rouge">ggml</code>
+<a href="https://github.com/ollama/ollama/blob/b3af953a55f0bd054937374404506c4229fbda8c/ml/backend/ggml/ggml.go#L61">here</a>
+to set up the device bbuffers and tensor memory allocations from the GGUF file,
+and ultimately concurrently <a href="https://github.com/ollama/ollama/blob/b3af953a55f0bd054937374404506c4229fbda8c/ml/backend/ggml/ggml.go#L300">read data</a> from GGUF to CPU (and optionally to device).</p>
+
+<p>After the model is fully loaded (in either mode), the runner responds to Ollama
+server calls (defined by the <code class="language-plaintext highlighter-rouge">LlamaServer</code> interface), performing forward
+passes on the embedded model and streaming responses to the Ollama server. When
+the runner needs to be offloaded (dictated by a TTL and the scheduler), the
+runner server process is killed, and model memory is freed.</p>
+
+    </div>
+    <div id='bibliography'>
+        <div class='wrap'>
+            <ol class="bibliography"></ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>
